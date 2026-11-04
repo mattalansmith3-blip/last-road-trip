@@ -1,0 +1,129 @@
+// The Last Road Trip — game data
+var LRT = (typeof LRT !== 'undefined') ? LRT : {};
+LRT.RARITY = [
+  { id:'worn', name:'Worn', mult:0.8, scrap:1, sell:1 },
+  { id:'solid', name:'Solid', mult:1.0, scrap:2, sell:2 },
+  { id:'rare', name:'Rare', mult:1.3, scrap:3, sell:4 },
+  { id:'legend', name:'Legendary', mult:1.7, scrap:5, sell:8 },
+];
+LRT.ADJ = [
+  ['Slightly Sticky','Duct-Taped','Questionable','Pre-Loved','Wobbly','Grandpa\'s'],
+  ['Trusty','Sturdy','Reliable','Road-Ready','Honest','Sensible'],
+  ['Fancy','Polished','Gleaming','Souped-Up','Premium','Tuned'],
+  ['Mythic','Legendary','Glorious','Absolutely Iconic','Sunkissed','Fabled'],
+];
+LRT.AFFIX = [
+  { id:'stun', name:'of Bonking', d:'+20% stun', stun:0.2 },
+  { id:'crit', name:'of Luck', d:'+15% crit', crit:0.15 },
+  { id:'acc', name:'of Focus', d:'+10% accuracy', acc:0.10 },
+  { id:'beast', name:'of the Wild', d:'+2 dmg vs animals', beast:2 },
+  { id:'human', name:'of Justice', d:'+2 dmg vs humans', human:2 },
+  { id:'snack', name:'of Snacking', d:'Heal 1 on each KO', leech:1 },
+];
+// slot: weapon, jacket, helmet, gloves, boots | use | res | junk
+LRT.ITEMS = {
+  slingshot:{n:'Slingshot',slot:'weapon',img:'it_slingshot',dmg:2,acc:0.86,range:5,w:6,tier:0,d:'Pew. Works at any range.'},
+  bat:{n:'Baseball Bat',slot:'weapon',img:'it_bat',dmg:4,acc:0.9,range:1,w:6,tier:0,d:'Melee. A classic.'},
+  pan:{n:'Frying Pan',slot:'weapon',img:'it_pan',dmg:3,acc:0.95,range:1,stun:0.3,w:5,tier:0,d:'Melee. BONK. 30% stun.'},
+  machete:{n:'Machete',slot:'weapon',img:'it_machete',dmg:5,acc:0.88,range:1,w:4,tier:1,d:'Melee. Swamp-approved.'},
+  crossbow:{n:'Crossbow',slot:'weapon',img:'it_crossbow',dmg:5,acc:0.76,range:5,w:3,tier:1,d:'Ranged. Quiet and mean.'},
+  revolver:{n:'Revolver',slot:'weapon',img:'it_revolver',dmg:6,acc:0.78,range:4,w:2,tier:2,d:'Ranged. Loud. Heat +0.2 per shot.',loud:1},
+  shotgun:{n:'Shotgun',slot:'weapon',img:'it_shotgun',dmg:8,acc:0.85,range:2,w:2,tier:2,d:'Range 2. Splashes the lanes next door.',splash:1,loud:1},
+  denim:{n:'Denim Jacket',slot:'jacket',img:'it_denim',armor:1,w:6,tier:0,d:'Armor. Timeless.'},
+  leather:{n:'Biker Jacket',slot:'jacket',img:'it_leather',armor:2,hp:2,w:3,tier:1,d:'Armor + max HP.'},
+  helmet:{n:'Bike Helmet',slot:'helmet',img:'it_helmet',armor:1,w:5,tier:0,d:'Armor. No crits against you.',nocrit:1},
+  gloves:{n:'Work Gloves',slot:'gloves',img:'it_gloves',mdmg:1,w:5,tier:0,d:'+melee damage.'},
+  boots:{n:'Hiking Boots',slot:'boots',img:'it_boots',hp:2,flee:0.1,w:5,tier:0,d:'+max HP, +10% flee.'},
+  medkit:{n:'First Aid Kit',slot:'use',img:'it_medkit',heal:8,w:6,val:3,d:'Heal 8 HP.'},
+  molotov:{n:'Molotov',slot:'use',img:'it_molotov',fire:6,w:4,val:3,d:'6 fire damage to a whole lane. Toasts swarms.'},
+  flashbang:{n:'Flashbang',slot:'use',img:'it_flashbang',stunall:1,w:3,val:3,d:'Stun every enemy for a turn.'},
+  bugspray:{n:'Bug Spray',slot:'use',img:'it_bugspray',bug:1,w:5,val:2,d:'Wipes out a swarm. Stings others for 2.'},
+  rocket:{n:'Firework',slot:'use',img:'it_rocket',scare:1,w:4,val:2,d:'Push all enemies back 2 and hit for 2.'},
+  tape:{n:'Duct Tape',slot:'use',img:'it_tape',repair:4,w:6,val:2,d:'Repair Marigold +4.'},
+  lockpick:{n:'Lockpick Set',slot:'use',img:'it_lockpick',pick:1,w:5,val:2,d:'Opens a lockbox or safe.'},
+  binoculars:{n:'Binoculars',slot:'use',img:'it_binoculars',scout:1,w:3,val:3,d:'Reveal every mystery stop in this region.'},
+  chicken:{n:'Rubber Chicken',slot:'use',img:'it_chicken',toy:1,w:3,val:1,d:'Biscuit\'s favorite. +2 bond.'},
+  fuel:{n:'Jerry Can',slot:'res',img:'it_fuel',res:'fuel',amt:3,w:10},
+  beans:{n:'Canned Beans',slot:'res',img:'it_beans',res:'food',amt:2,w:10},
+  water:{n:'Water Bottle',slot:'res',img:'it_water',res:'food',amt:1,w:8},
+  parts:{n:'Spare Parts',slot:'res',img:'it_parts',res:'parts',amt:3,w:9},
+  battery:{n:'Batteries',slot:'res',img:'it_battery',res:'batteries',amt:3,w:9},
+  treat:{n:'Dog Treat',slot:'res',img:'it_treat',res:'treats',amt:1,w:6},
+  kibble:{n:'Kibble Sack',slot:'res',img:'it_kibble',res:'treats',amt:2,w:4},
+  phone:{n:'Cracked Phone',slot:'junk',img:'it_phone',w:5,val:1,d:'14,000 unread emails. None matter now.'},
+  toaster:{n:'Toaster',slot:'junk',img:'it_toaster',w:4,val:2,d:'Makes toast. Needs electricity. And bread.'},
+  hubcap:{n:'Hubcap',slot:'junk',img:'it_hubcap',w:5,val:1,d:'Shiny. Useless. Shiny.'},
+  cassette:{n:'Mystery Mixtape',slot:'junk',img:'it_cassette',w:4,val:3,d:'Labelled "SUMMER JAMZ 98". Traders love it.'},
+};
+LRT.SLOTS = ['weapon','jacket','helmet','gloves','boots'];
+LRT.SOUVENIRS = {
+  hula:{n:'Hula Bobblehead',d:'First attack each fight deals +3.'},
+  dice:{n:'Fuzzy Dice',d:'+10% crit chance.'},
+  flamingo:{n:'Lawn Flamingo',d:'Heal 3 HP after every fight.'},
+  globe:{n:'Snow Globe',d:'The Heat moves 25% slower.'},
+  gator:{n:'Gator Bobblehead',d:'+2 damage vs animals.'},
+  trumpet:{n:'Trumpet Keychain',d:'Talk is 25% more convincing.'},
+  dino:{n:'Plastic Dino',d:'Fleeing never dents Marigold.'},
+  horseshoe:{n:'Lucky Horseshoe',d:'+1 item in every container.'},
+  sun:{n:'Sunny Figurine',d:'+1 battery every drive.'},
+  disco:{n:'Disco Ball',d:'Enemies are dazzled for the first turn.'},
+  pelican:{n:'Pelican Plush',d:'Biscuit fetches a bonus item after fights.'},
+  minivan:{n:'Mini Marigold',d:'Marigold +6 max HP, repairs 1 each stop.'},
+  lava:{n:'Lava Lamp',d:'Treats give double bond.'},
+};
+LRT.COMBOS = [
+  { id:'floridaman', n:'Florida Man', need:['gator','flamingo'], d:'+2 damage on everything.' },
+  { id:'nightfever', n:'Night Fever', need:['disco','lava'], d:'Dazzle lasts 2 turns.' },
+  { id:'luckystreak', n:'Lucky Streak', need:['dice','horseshoe'], d:'Legendary chance doubled.' },
+  { id:'roadroyalty', n:'Road Royalty', need:['minivan','dino'], d:'Marigold +6 more max HP.' },
+  { id:'sunshineband', n:'Sunshine Band', need:['sun','trumpet'], d:'+2 batteries at every trader.' },
+  { id:'beachbum', n:'Beach Bum', need:['hula','pelican'], d:'Camps heal everyone fully.' },
+];
+LRT.MODULES = {
+  engine:{n:'Engine', d:['Burns 2 fuel per drive','Burns 2 fuel, 50% chance to burn 1','Burns 1 fuel per drive','Burns 1 fuel, fleeing always works'], cost:[[4,2],[7,4],[11,7]]},
+  tires:{n:'Tires', d:['Flats happen','Fewer flats, +5% flee','No flats','No flats, rough roads cost no extra fuel'], cost:[[3,1],[6,3],[9,5]]},
+  armor:{n:'Armor', d:['Marigold max HP 12','Max HP 16','Max HP 20, ram 3 at fight start','Max HP 24, ram 5'], cost:[[4,2],[7,4],[11,6]]},
+  rack:{n:'Roof Rack', d:['Pack holds 8','Pack holds 10','Pack holds 12','Pack holds 14'], cost:[[3,2],[6,3],[9,5]]},
+  kitchen:{n:'Kitchen', d:['Camp heals 4','Camp heals 7','Camp heals 10','Camp heals 13 and cooks a buff'], cost:[[3,2],[6,3],[9,5]]},
+  dogbed:{n:'Dog Bed', d:['Biscuit recovers in 3 stops','2 stops, +2 Biscuit HP','1 stop, +4 Biscuit HP','Instant patch-up, +6 HP'], cost:[[3,1],[5,3],[8,5]]},
+  solar:{n:'Solar Panel', d:['No solar','+1 battery per drive','+1 battery, +1 fuel every 3 drives','+2 batteries per drive'], cost:[[5,3],[8,5],[12,7]]},
+};
+LRT.ENEMIES = {
+  gator:{n:'Gator',img:'en_gator',hp:11,dmg:3,spd:1,kind:'beast',dist:3,h:0.32,w:1.0,tell:'gator'},
+  snake:{n:'Rattlesnake',img:'en_snake',hp:5,dmg:2,spd:1,kind:'beast',dist:2,h:0.3,w:0.8,tell:'snake'},
+  swarm:{n:'Mosquito Swarm',img:'en_swarm',hp:7,dmg:1,spd:1,kind:'beast',dist:3,h:0.55,w:0.55,tell:'swarm'},
+  boar:{n:'Wild Boar',img:'en_boar',hp:9,dmg:3,spd:1,kind:'beast',dist:4,h:0.36,w:0.95,tell:'boar'},
+  wolf:{n:'Wolf',img:'en_wolf',hp:6,dmg:2,spd:2,kind:'beast',dist:4,h:0.42,w:0.9,tell:'wolf'},
+  krewe:{n:'Toll Bandit',img:'en_krewe',hp:7,dmg:3,spd:1,kind:'human',dist:3,h:0.62,w:0.6,tell:'krewe'},
+  raider:{n:'Welder Raider',img:'en_raider',hp:10,dmg:3,spd:1,kind:'human',dist:4,h:0.64,w:0.6,tell:'raider'},
+  conman:{n:'Slick Rick',img:'en_conman',hp:6,dmg:1,spd:1,kind:'human',dist:3,h:0.64,w:0.55,tell:'conman'},
+};
+LRT.REGIONS = [
+  { id:'fl', n:'The Florida Keys & Swamps', short:'Florida', map:'map_fl', fight:'bg_fight_fl', stops:['stop_gas','stop_attraction','stop_camp'],
+    foes:[['gator'],['snake'],['swarm'],['boar'],['snake','swarm'],['gator','snake'],['conman'],['boar','swarm']],
+    boss:{ n:'Big Al and the Sunbathers', foes:['gator','gator','gator'], bossHp:[18,0,0], intro:'A gator the size of a canoe is sunning on the bridge out of Florida. Two of his cousins are with him. Nobody is moving.' },
+    blurb:'Flamingos, empty resorts and a LOT of gators. Head north, then west.' },
+  { id:'gulf', n:'The Gulf Coast & Bayou', short:'Bayou', map:'map_gulf', fight:'bg_fight_gulf', stops:['stop_town','stop_camp','stop_gas'],
+    foes:[['krewe'],['swarm','swarm'],['boar','boar'],['krewe','krewe'],['conman','krewe'],['gator','swarm'],['snake','boar']],
+    boss:{ n:'The Krewe of the Toll Bridge', foes:['krewe','raider','krewe'], bossHp:[0,16,0], toll:9, intro:'The only bridge west is covered in beads, feathers and very serious people. "TOLL," says their king, through a megaphone made of a tuba.' },
+    blurb:'Spanish moss, brass bands echoing over the water, and a toll bridge with opinions.' },
+];
+LRT.NODE = {
+  scavenge:{n:'Abandoned House',icon:'nd_scavenge'}, gas:{n:'Gas Station',icon:'nd_gas'}, diner:{n:'Diner',icon:'nd_diner'},
+  trader:{n:'Trader',icon:'nd_trader'}, danger:{n:'Trouble',icon:'nd_danger'}, mystery:{n:'???',icon:'nd_mystery'},
+  attraction:{n:'Roadside Attraction',icon:'nd_attraction'}, camp:{n:'Campsite',icon:'nd_camp'}, mail:{n:'Mailbox',icon:'nd_mail'},
+  goal:{n:'Region Exit',icon:'nd_goal'}, start:{n:'Start',icon:'nd_camp'},
+};
+LRT.ACH = [
+  {id:'first_trip',n:'Hit the Road',d:'Finish your first trip, any way.'},
+  {id:'fl_done',n:'Florida Survivor',d:'Leave Florida behind.'},
+  {id:'gulf_done',n:'Toll Free',d:'Cross the Toll Bridge.'},
+  {id:'sunspire',n:'Sunspire!',d:'Reach Sunspire Park.'},
+  {id:'legend',n:'Shiny!',d:'Find a Legendary item.'},
+  {id:'dash5',n:'Dashboard Curator',d:'Hold 5 souvenirs at once.'},
+  {id:'combo',n:'Combo Platter',d:'Activate a souvenir combo.'},
+  {id:'goodboy',n:'Who\'s a Good Boy',d:'Reach max bond with Biscuit.'},
+  {id:'scrapper',n:'One Person\'s Trash',d:'Scrap 25 items.'},
+  {id:'pacifist',n:'Talk It Out',d:'Talk your way out of 3 fights.'},
+];
+if (typeof module !== 'undefined') module.exports = LRT;
