@@ -234,3 +234,4 @@ button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:poin
 
 .toast{font-size:13px;padding:6px 10px}
 @media (orientation:landscape){.ctwrap{height:40vh}.loot .btn{min-height:40px}}
+@media (orientation:landscape){.ctwrap{height:30vh}.loot .lside,.loot>div:first-of-type{overflow-y:auto;max-height:calc(100% - 30px)}.loot .btn{min-height:36px;font-size:14px}}
