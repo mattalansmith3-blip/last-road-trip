@@ -76,8 +76,6 @@ button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:poin
 @keyframes spin{to{transform:rotate(360deg)}}
 .vantok{position:absolute;width:19%;max-width:96px;transform:translate(-50%,-78%);z-index:6;transition:left .9s ease-in-out,top .9s ease-in-out;filter:drop-shadow(0 4px 4px rgba(0,0,0,.5))}
 .vantok img{width:100%}
-.heat{position:absolute;z-index:2;pointer-events:none;background:linear-gradient(var(--hd),rgba(255,70,20,.55),rgba(255,140,30,.18) 85%,rgba(255,160,40,0));transition:all .9s}
-.heatlbl{position:absolute;z-index:7;font-family:Fredoka;font-weight:600;font-size:12px;color:#fff;background:#d9481c;border-radius:8px;padding:1px 7px;transform:translate(-50%,-50%);white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35)}
 .regtag{position:absolute;z-index:7;left:8px;top:8px;font-family:Fredoka;font-weight:600;color:#fff;background:rgba(43,26,16,.82);border-radius:10px;padding:3px 10px;font-size:14px}
 .regtag small{display:block;font-family:Nunito;font-weight:700;font-size:11px;opacity:.85}
 .sheet{position:absolute;left:8px;right:8px;bottom:8px;z-index:20;animation:up .25s ease-out}
@@ -235,3 +233,17 @@ button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:poin
 .toast{font-size:13px;padding:6px 10px}
 @media (orientation:landscape){.ctwrap{height:40vh}.loot .btn{min-height:40px}}
 @media (orientation:landscape){.ctwrap{height:30vh}.loot .lside,.loot>div:first-of-type{overflow-y:auto;max-height:calc(100% - 30px)}.loot .btn{min-height:36px;font-size:14px}}
+
+.trade .dock{display:flex;flex-direction:column;overflow:hidden}.trade .dock>.paper{flex:1;min-height:0;overflow-y:auto}
+.pinleave{padding:6px 8px;background:rgba(43,26,16,.85)}.pinleave .btn{width:100%}
+.fin .finwrap .bg{transition:filter 3.5s ease-out}
+.fin.st0 .finwrap .bg{animation:powerup 5s ease-out forwards}
+@keyframes powerup{0%{filter:brightness(.18) saturate(.3)}20%{filter:brightness(.25) saturate(.4)}45%{filter:brightness(.55) saturate(.8)}70%{filter:brightness(.8)}100%{filter:brightness(1) saturate(1.1)}}
+.pu{opacity:0;animation:fadein .6s forwards}.p1{animation-delay:.6s}.p2{animation-delay:1.4s}.p3{animation-delay:2.3s}.p4{animation-delay:3.2s}.p5{animation-delay:4.1s}
+@keyframes fadein{to{opacity:1}}
+.friends{display:grid;gap:6px;margin:6px 0;max-height:40vh;overflow-y:auto}.fr{display:flex;gap:8px;align-items:center;background:#fff7e6;border-radius:10px;padding:4px 8px}.fr img{height:52px;width:52px;object-fit:contain}
+.fin.st2 .finwrap{aspect-ratio:4/3}
+.pc .pcmsg{font-family:Fredoka;font-weight:400;font-size:17px;line-height:1.35;color:#3a2a6a;transform:rotate(-1.5deg);padding:4px 2px}
+.trade .dock{height:70%}
+@media (orientation:landscape){.trade .dock{height:calc(100% - 16px)}}
+.fin .center{position:relative;z-index:30}

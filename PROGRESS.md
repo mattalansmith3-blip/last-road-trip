@@ -10,3 +10,11 @@
 ## Loops 1–3 (2026-11-04 PT)
 - Fixed portrait fight arena collapse, toast spam, landscape loot cutoff. Live real-tap runs at both sizes: 0 errors, 0 offscreen issues.
 - Gaps: Texas/Mojave + Sunspire finale regions not yet built; garage not hit by tap bot; fuel economy harsh.
+
+## Milestone 2 — Full route + finale, Heat removed (2026-11-04 PT)
+- New regions: Texas Big Empty (boss: Rodeo Clown Posse feat. Kevin the bear) and Route 66 & the Mojave (boss: the Sand Queen of Amboy).
+- New enemies with tells: Cougar (stalk → pounce), Picnic Bear (rear → maul, or eats your food and leaves), Coyote (fast, scrams when hurt), Giant Scorpion (tail up → poison sting), Dusty Dee outlaw (aim → shot).
+- 12 new events; new characters Grandma Rosa and Big Wendell the trucker; new art (2 maps, 2 fight backgrounds, motel stop, 5 enemies, 2 NPCs, finale palace, postcard).
+- Finale: 3 beats — rides power up, friends you met waiting at the palace, a postcard home.
+- Heat chase removed entirely (per Matthew). Pacing pressure is now resource tension: per-drive fuel/food, lingering eats supplies, Marigold wear rises by region, enemies scale by region.
+- Fixes: toasts clear on screen change (no radio overlap), trader Leave pinned, garage covered by real-tap tests.

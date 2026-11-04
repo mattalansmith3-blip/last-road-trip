@@ -7,7 +7,7 @@ function ri(s,a,b){ return a + Math.floor(rng(s)*(b-a+1)); }
 function pick(s,arr){ return arr[Math.floor(rng(s)*arr.length)]; }
 function wpick(s, pairs){ var t=0,i; for(i=0;i<pairs.length;i++) t+=pairs[i][1]; var r=rng(s)*t; for(i=0;i<pairs.length;i++){ r-=pairs[i][1]; if(r<=0) return pairs[i][0]; } return pairs[pairs.length-1][0]; }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
-L.COLS = COLS; L.HEAT0 = -1.4;
+L.COLS = COLS;
 L.util = { rng:rng, ri:ri, pick:pick, clamp:clamp };
 
 // ---------- derived stats ----------
@@ -43,7 +43,9 @@ function dogMax(s){ return 10 + 2*s.van.mods.dogbed; }
 function dashCap(s){ return 4 + Math.min(2, s.region); }
 function weapon(s){ return s.gear.weapon ? istat(s.gear.weapon) : {dmg:1,acc:0.92,range:1,stun:0,crit:0,beast:0,human:0,leech:0}; }
 L.hpMax=hpMax; L.armor=armor; L.vanMax=vanMax; L.packCap=packCap; L.dogMax=dogMax; L.dashCap=dashCap; L.weapon=weapon;
-function heatRate(s){ return (0.95 + 0.05*s.region) * (has(s,'globe')?0.75:1); }
+// Lingering (extra searches, camping, waiting) costs supplies instead of a chase timer.
+function linger(s, amt){ s.wear=(s.wear||0)+amt*(has(s,'globe')?0.75:1); var out=[]; while (s.wear>=1){ s.wear-=1; if (s.res.food>0){ s.res.food--; out.push('-1 food'); } else { s.hp-=2; out.push('-2 HP (hungry)'); } } if (out.length) say(s,'Time passes: '+out.join(', ')+'.','info'); }
+L.linger = linger;
 function fuelCost(s){ var e=s.van.mods.engine; return e>=2?1:2; }
 L.fuelCost = fuelCost;
 
@@ -83,7 +85,7 @@ L.mkContainer = mkContainer;
 function newRun(opt){
   opt = opt||{};
   var s = { v:3, seed:(opt.seed>>>0)||((Date.now()*2654435761)>>>0), daily:!!opt.daily, uid:0, logId:0, log:[],
-    region:0, col:0, node:null, map:null, day:1, heat:L.HEAT0,
+    region:0, col:0, node:null, map:null, day:1, wear:0,
     res:{ fuel:8, food:7, parts:2, treats:2, batteries:4 },
     hp:20, gear:{ weapon:null, jacket:null, helmet:null, gloves:null, boots:null }, pack:[], dash:[],
     van:{ hp:12, mods:{ engine:0, tires:0, armor:0, rack:0, kitchen:0, dogbed:0, solar:0 } },
@@ -142,10 +144,10 @@ function travel(s, nid){
   if (s.van.mods.engine===1 && rng(s)<0.5) fc = 1;
   if (opt.rough && s.van.mods.tires<3) fc += 1;
   var msg = [];
-  if (s.res.fuel >= fc) s.res.fuel -= fc; else { var miss = fc - s.res.fuel; s.res.fuel = 0; s.hp -= 3*miss; s.heat += 0.4; msg.push('Out of gas! You push Marigold the rest of the way (-'+(3*miss)+' HP).'); }
+  if (s.res.fuel >= fc) s.res.fuel -= fc; else { var miss = fc - s.res.fuel; s.res.fuel = 0; s.hp -= 3*miss; s.van.hp -= miss; msg.push('Out of gas! You push Marigold the rest of the way (-'+(3*miss)+' HP).'); }
   var eat = 1 + (s.hiker?1:0);
-  if (s.res.food >= eat) s.res.food -= eat; else { s.res.food = 0; s.hp -= 2; s.dog.bond = Math.max(0, s.dog.bond-1); msg.push('No snacks. Everyone is hangry (-2 HP, Biscuit sulks).'); }
-  s.heat += heatRate(s);
+  if (s.res.food >= eat) s.res.food -= eat; else { s.res.food = 0; s.hp -= 1; s.dog.bond = Math.max(0, s.dog.bond-1); msg.push('No snacks. Everyone is hangry (-1 HP, Biscuit sulks).'); }
+  if (rng(s) < 0.05+0.025*s.region){ s.van.hp -= 1; msg.push('Marigold rattles. Something fell off (-1 Marigold).'); }
   if (s.van.mods.solar) { s.res.batteries += (s.van.mods.solar>=3?2:1); }
   if (s.van.mods.solar>=2 && (s.stats.drives%3)===2) s.res.fuel += 1;
   if (has(s,'sun')) s.res.batteries += 1;
@@ -161,7 +163,6 @@ function travel(s, nid){
   var nd = opt.node; nd.done = true; nd.seen = true;
   if (has(s,'minivan') && s.van.hp < vanMax(s)) s.van.hp++;
   if (s.dog.hurt>0){ s.dog.hurt--; if (s.dog.hurt===0){ s.dog.hp = Math.max(4, Math.round(dogMax(s)*0.6)); msg.push('Biscuit hops out of the dog bed, tail going. He\'s back!'); } }
-  if (s.heat >= s.col){ s.hp -= 2; s.res.food = Math.max(0, s.res.food-1); msg.push('The Heat caught up! Sweltering (-2 HP, -1 food). Keep moving!'); }
   if (s.van.hp <= 0){ if (s.res.parts>=3){ s.res.parts-=3; s.van.hp=3; msg.push('Marigold died... you rebuild her carburetor with 3 parts. She lives!'); } else if (takeUse(s,'tape')){ s.van.hp=4; msg.push('Marigold sputtered out. Duct tape saves the day (+4).'); } else { msg.forEach(function(m){ say(s,m,'warn'); }); return endRun(s,'van'); } }
   msg.forEach(function(m){ say(s,m,'warn'); });
   if (s.hp <= 0) return endRun(s,'hp');
@@ -263,7 +264,7 @@ function gearScore(it){ var st=istat(it), b=L.ITEMS[it.k]; if (b.slot==='weapon'
 L.gearScore = gearScore;
 function nextC(s){ if (s.loot.cur < s.loot.cs.length-1){ s.loot.cur++; return true; } leaveLoot(s); return false; }
 function leaveLoot(s){ var st = s.stop; s.loot=null; if (st && st.type==='scavenge' && st.searchable){ s.screen='stop'; st.result=null; st.again=true; return; } toMap(s); }
-function searchAgain(s){ var st=s.stop; if (!st||!st.again) return false; st.searches++; s.heat += 0.35; st.again=false;
+function searchAgain(s){ var st=s.stop; if (!st||!st.again) return false; st.searches++; linger(s,0.5); st.again=false;
   if (rng(s) < 0.22 + 0.1*st.searches){ startFight(s, [pick(s,['snake','boar','swarm'])], {reward:null, intro:'Something did NOT want to be disturbed.'}); return true; }
   if (rng(s) < 0.75 - 0.2*st.searches){ st.searchable = st.searches<2; openLoot(s,[pick(s,['crate','crate','cooler'])],{}); say(s,'You find a closet nobody checked.','good'); return true; }
   say(s,'Nothing but dust bunnies and a cookbook. This place is picked clean.','info'); st.searchable=false; toMap(s); return true; }
@@ -323,8 +324,8 @@ function startFight(s, foes, opt){
   var f = { foes:[], turn:1, first:true, dazzle: has(s,'disco') ? (hasCombo(s,'nightfever')?2:1) : 0, dogCd:{bark:0,bite:0,fetch:0}, brace:false,
     reward: opt.reward===undefined?'crate':opt.reward, boss:!!opt.boss, toll:opt.toll||0, intro:opt.intro||null, saved:false, fx:[], talkTried:false, angry:0, node:opt.node||null, name:opt.name||null, svOffer: opt.svOffer||0 };
   var lanes=[1,0,2];
-  foes.forEach(function(k,i){ var d=L.ENEMIES[k]; var hp=Math.round(d.hp*(1+0.22*T)) + (opt.bossHp&&opt.bossHp[i]?opt.bossHp[i]:0);
-    f.foes.push({ k:k, hp:hp, max:hp, dist: Math.min(5, d.dist + (i>0&&rng(s)<0.5?1:0)), lane:lanes[i%3], dmg: d.dmg + Math.floor(T*0.7) + (opt.bossHp&&opt.bossHp[i]?1:0), stun:0, st:{}, alpha: k==='wolf' && !f.foes.some(function(e){return e.k==='wolf';}), boss: !!(opt.bossHp&&opt.bossHp[i]), intent:null, id:i, gone:false }); });
+  foes.forEach(function(k,i){ var d=L.ENEMIES[k]; var hp=Math.round(d.hp*(1+0.14*T)) + (opt.bossHp&&opt.bossHp[i]?opt.bossHp[i]:0);
+    f.foes.push({ k:k, hp:hp, max:hp, dist: Math.min(5, d.dist + (i>0&&rng(s)<0.5?1:0)), lane:lanes[i%3], dmg: d.dmg + Math.floor(T*0.4) + (opt.bossHp&&opt.bossHp[i]?1:0), stun:0, st:{}, alpha: k==='wolf' && !f.foes.some(function(e){return e.k==='wolf';}), boss: !!(opt.bossHp&&opt.bossHp[i]), intent:null, id:i, gone:false }); });
   s.fight = f; s.screen='fight'; s.stats.fights++;
   if (s.van.mods.armor>=2){ var t0=f.foes[0], ram = s.van.mods.armor>=3?5:3; t0.hp-=ram; f.fx.push({t:'ram',id:t0.id,n:ram}); say(s,'Marigold rams the '+L.ENEMIES[t0.k].n.toLowerCase()+' on the way in! ('+ram+')','good'); if (t0.hp<=0) killFoe(s,t0); }
   f.foes.forEach(function(e){ setIntent(s,e); });
@@ -366,12 +367,30 @@ function setIntent(s,e){
       if (e.st.dist){ I={t:'steal'}; break; }
       if (e.dist<=3 && !e.st.did){ I={t:'distract'}; break; }
       I = e.dist>1 ? {t:'move',n:1} : {t:'attack',dmg:dmg}; break;
+    case 'cougar':
+      if (e.st.pawed){ I={t:'pounce',dmg:dmg*2}; break; }
+      if (e.dist<=3 && rng(s)<0.6){ I={t:'stalk'}; break; }
+      I = e.dist>1 ? {t:'move',n:d.spd} : {t:'attack',dmg:dmg}; break;
+    case 'bear':
+      if (e.dist>1){ I={t:'move',n:1}; break; }
+      if (s.res.food>0 && !e.st.ate && rng(s)<0.45){ I={t:'snack'}; break; }
+      I = e.st.pawed ? {t:'maul',dmg:dmg*2} : {t:'rear'}; break;
+    case 'coyote':
+      if (e.hp<=2){ I={t:'scram'}; break; }
+      I = e.dist>1 ? {t:'move',n:d.spd} : {t:'attack',dmg:dmg}; break;
+    case 'scorpion':
+      if (e.dist>1){ I={t:'move',n:1}; break; }
+      I = e.st.pawed ? {t:'stab',dmg:dmg+2} : {t:'tailup'}; break;
+    case 'outlaw':
+      if (e.st.pawed){ I={t:'shoot',dmg:dmg+2}; break; }
+      if (e.dist>=2 && rng(s)<0.5){ I={t:'aim'}; break; }
+      I = e.dist>1 ? {t:'move',n:1} : {t:'attack',dmg:dmg}; break;
     default:
       I = e.dist>1 ? {t:'move',n:d.spd} : {t:'attack',dmg:dmg};
   }
   e.intent = I;
 }
-L.INTENT = { move:'Advancing', attack:'Attack', howl:'Howling! Pack gets +1 dmg', paw:'Pawing the dirt... CHARGE next turn', charge:'CHARGE!', rattle:'Rattling... bite next turn', bite:'Venom bite', submerge:'Submerging (can\'t be shot)', jaws:'Jaws open... death roll next', roll:'DEATH ROLL', sting:'Stinging from range', light:'Lighting a molotov...', throw:'Throwing fire!', distract:'"Hey, look over there!"', steal:'Grabbing your stuff!', stunned:'Stunned', dazzled:'Dazzled by the disco ball', };
+L.INTENT = { move:'Advancing', attack:'Attack', howl:'Howling! Pack gets +1 dmg', paw:'Pawing the dirt... CHARGE next turn', charge:'CHARGE!', rattle:'Rattling... bite next turn', bite:'Venom bite', submerge:'Submerging (can\'t be shot)', jaws:'Jaws open... death roll next', roll:'DEATH ROLL', sting:'Stinging from range', light:'Lighting a molotov...', throw:'Throwing fire!', distract:'"Hey, look over there!"', steal:'Grabbing your stuff!', stunned:'Stunned', stalk:'Stalking low... POUNCE next', pounce:'POUNCE!', snack:'Sniffing your snacks...', rear:'Rearing up... MAUL next', maul:'MAUL!', scram:'About to scram', tailup:'Tail raised... sting next', stab:'Poison sting', aim:'Taking aim... shot next', shoot:'Bang!', dazzled:'Dazzled by the disco ball', };
 function heroDmgBase(s, e, power){
   var w=weapon(s), d=L.ENEMIES[e.k], dmg=w.dmg;
   if (w.range<=1) dmg += gearSum(s,'mdmg');
@@ -403,7 +422,6 @@ function heroAct(s, act, tid, extra){
       if (!e.gone && e.k==='conman') { e.st.dist=false; e.st.did=true; }
       if (w.splash){ f.foes.forEach(function(o){ if(!o.gone && o!==e && Math.abs(o.lane-e.lane)===1 && o.dist<=w.range) dmgFoe(s,o,Math.ceil(dmg/3)); }); }
     } else f.fx.push({t:'miss',id:e.id});
-    if (w.loud) s.heat += 0.15;
     f.first=false;
   } else if (act==='shove'){
     if (!e || e.gone || e.dist>1) return false;
@@ -441,7 +459,7 @@ function dogAct(s, cmd, tid){
   var f=s.fight; if (!f||f.over||s.dog.hurt>0||s.dog.hp<=0) return false; if (f.dogUsed) return false; if (f.dogCd[cmd]>0) return false;
   f.fx=[];
   var e = tid!==undefined&&tid!==null ? f.foes[tid] : null;
-  if (cmd==='bark'){ alive(f).forEach(function(o){ if (L.ENEMIES[o.k].kind==='beast'){ o.dist=Math.min(5,o.dist+1); o.st.pawed=false; o.st.jaws=false; o.st.rattled=false; if (o.intent && ['howl','paw','charge','jaws','roll','rattle','bite'].indexOf(o.intent.t)>=0){ o.intent={t:'shoved'}; o.skip=1; } } else { if (o.st.lit){ o.st.lit=false; o.intent={t:'shoved'}; o.skip=1; } } }); f.dogCd.bark = s.dog.bond>=6?2:3; f.fx.push({t:'bark'}); }
+  if (cmd==='bark'){ alive(f).forEach(function(o){ if (L.ENEMIES[o.k].kind==='beast'){ o.dist=Math.min(5,o.dist+1); o.st.pawed=false; o.st.jaws=false; o.st.rattled=false; if (o.intent && ['howl','paw','charge','jaws','roll','rattle','bite','stalk','pounce','rear','maul','tailup','stab'].indexOf(o.intent.t)>=0){ o.intent={t:'shoved'}; o.skip=1; } } else { if (o.st.lit||o.st.pawed){ o.st.lit=false; o.st.pawed=false; o.intent={t:'shoved'}; o.skip=1; } } }); f.dogCd.bark = s.dog.bond>=6?2:3; f.fx.push({t:'bark'}); }
   else if (cmd==='bite'){ if (!e||e.gone||e.dist>1) return false; dmgFoe(s,e, 2+Math.floor(s.dog.bond/3), 'dog'); f.dogCd.bite=2; f.fx.push({t:'dogbite',id:e.id}); }
   else if (cmd==='fetch'){ var h = alive(f).filter(function(o){ return L.ENEMIES[o.k].kind==='human'; })[0]; if(!h) return false; var n=ri(s,2,4); s.res.batteries+=n; f.dogCd.fetch=99; f.fx.push({t:'fetch',id:h.id,n:n}); say(s,'Biscuit snatches a pouch off the '+L.ENEMIES[h.k].n.toLowerCase()+'! +'+n+' batteries.','dog'); }
   else return false;
@@ -479,6 +497,13 @@ function enemyTurn(s){
       case 'sting': hitHero(s,e,I.dmg,'sting'); if (e.dist>1) e.dist--; break;
       case 'light': e.st.lit=true; break;
       case 'throw': e.st.lit=false; e.st.threw=true; hitHero(s,e,I.dmg,'throw'); break;
+      case 'stalk': case 'rear': case 'tailup': case 'aim': e.st.pawed=true; break;
+      case 'pounce': e.st.pawed=false; e.dist=1; hitHero(s,e,I.dmg,'melee'); break;
+      case 'maul': e.st.pawed=false; hitHero(s,e,I.dmg,'melee'); break;
+      case 'stab': e.st.pawed=false; hitHero(s,e,I.dmg,'melee'); s.fight.poison=3; break;
+      case 'shoot': e.st.pawed=false; hitHero(s,e,I.dmg,'throw'); break;
+      case 'snack': e.st.ate=true; var fd=Math.min(2,s.res.food); s.res.food-=fd; say(s,'The bear eats '+fd+' of your food, sighs happily, and wanders off for a nap.','warn'); e.gone=true; f.fx.push({t:'leave',id:e.id}); break;
+      case 'scram': say(s,'The coyote yips and scrams. Coward. (Smart coward.)','info'); e.gone=true; f.fx.push({t:'leave',id:e.id}); break;
       case 'distract': e.st.dist=true; e.st.did=true; break;
       case 'steal': e.st.dist=false; var loot = s.pack.length ? s.pack.splice(Math.floor(rng(s)*s.pack.length),1)[0] : null; if (loot){ say(s,'Slick Rick swiped your '+iname(loot)+' and vanished! Rude.','warn'); } else { var b=Math.min(3,s.res.batteries); s.res.batteries-=b; say(s,'Slick Rick swiped '+b+' batteries and vanished!','warn'); } e.gone=true; f.fx.push({t:'leave',id:e.id}); break;
     }
@@ -511,12 +536,12 @@ L.afterFight = afterFight;
 // ---------- region / end ----------
 function regionDone(s){
   if (s.flags['rdone'+s.region]) return; s.flags['rdone'+s.region]=1;
-  if (s.region===0) s.flags.fl_done=1; if (s.region===1) s.flags.gulf_done=1;
+  s.flags[['fl','gulf','tx','mojave'][s.region]+'_done']=1;
   if (s.hiker){ say(s, s.hiker.n+' hops out at the state line. "Best ride ever." They leave you '+s.hiker.gift+'.','good'); if (s.hiker.giftK) { var g=mkItem(s,s.hiker.giftK,2, s.hiker.giftK==='bat'?0:-1); if (s.pack.length<packCap(s)) s.pack.push(g); } s.hiker=null; }
   if (s.region >= L.REGIONS.length-1){ s.screen='finale'; s.ended={why:'win', t:Date.now()}; s.flags.sunspire=1; return; }
   s.screen='region'; s.regionCard = { from:s.region, to:s.region+1 };
 }
-function nextRegion(s){ s.region++; s.heat=L.HEAT0; genMap(s); s.screen='map'; s.regionCard=null; s.hp=Math.min(hpMax(s), s.hp+4); say(s,'Welcome to '+L.REGIONS[s.region].n+'. '+L.REGIONS[s.region].blurb,'story'); }
+function nextRegion(s){ s.region++; genMap(s); s.screen='map'; s.regionCard=null; s.hp=Math.min(hpMax(s), s.hp+12); give(s,'food',2); s.van.hp=Math.min(vanMax(s), s.van.hp+3); give(s,'fuel',2); say(s,'Welcome to '+L.REGIONS[s.region].n+'. '+L.REGIONS[s.region].blurb,'story'); }
 L.nextRegion = nextRegion;
 function endRun(s, why){ s.screen='end'; s.ended = { why:why, t:Date.now() }; return true; }
 L.endRun = endRun;

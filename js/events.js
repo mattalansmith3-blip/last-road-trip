@@ -3,8 +3,8 @@ var U=L.util;
 function r(s){ return U.rng(s); }
 function fightNext(foes, extra){ var o={fight:foes, reward:'crate'}; for (var k in extra) o[k]=extra[k]; return o; }
 L.EVENTS = [
- { id:'house', at:['scavenge'], bg:function(s){ return s.region===0?'stop_house':'stop_cottage'; },
-   text:function(s){ return s.region===0 ? U.pick(s,['A pastel beach house, door wide open. A wind chime plays to nobody.','A stilt house with a hammock still swinging. The fridge door is ajar.','A retirement condo. The welcome mat says something about grandkids.']) : U.pick(s,['A creole cottage with a porch swing and a very judgmental cat.','A fishing shack on stilts. Smells like adventure (and fish).','A tidy shotgun house. Someone left the radio playing static.']); },
+ { id:'house', at:['scavenge'], bg:function(s){ return s.region===0?'stop_house':s.region===3?'stop_motel':'stop_cottage'; },
+   text:function(s){ return s.region===2 ? U.pick(s,['A ranch house with a longhorn skull over the door and a porch full of rocking chairs.','A double-wide with a satellite dish the size of a swimming pool.']) : s.region===3 ? U.pick(s,['A roadside motel. Room 6 is unlocked. Room 6 is always unlocked.','A desert homestead with a rock garden and a hundred wind chimes.']) : s.region===0 ? U.pick(s,['A pastel beach house, door wide open. A wind chime plays to nobody.','A stilt house with a hammock still swinging. The fridge door is ajar.','A retirement condo. The welcome mat says something about grandkids.']) : U.pick(s,['A creole cottage with a porch swing and a very judgmental cat.','A fishing shack on stilts. Smells like adventure (and fish).','A tidy shotgun house. Someone left the radio playing static.']); },
    choices:function(s){ return [
      { t:'Search the place', go:function(s){ s.stop.searchable=true; return {text:'You step inside. Dusty, quiet, promising.', next:{loot:['crate']}}; } },
      { t:'Check the garage too (riskier, better)', go:function(s){ s.stop.searchable=true; if (r(s)<0.4) return {text:'The garage door rolls up and something rolls OUT.', next:fightNext([U.pick(s,['boar','snake','swarm'])],{reward:'lockbox'})}; return {text:'A locked toolbox in the garage! And a crate.', next:{loot:['crate','lockbox']}}; } },
@@ -14,7 +14,7 @@ L.EVENTS = [
    choices:function(s){ return [
      { t:'Siphon the tanks (+fuel)', go:function(s){ var n=U.ri(s,2,4); L.give(s,'fuel',n); return {text:'Gurgle, gurgle. +'+n+' fuel. Marigold purrs.'}; } },
      { t:'Raid the snack shop', go:function(s){ return {text:'Chips, jerky, a cooler that has seen things.', next:{loot:['cooler']}}; } },
-     { t:'Do both (takes longer, Heat +0.4)', go:function(s){ var n=U.ri(s,2,3); L.give(s,'fuel',n); s.heat+=0.4; if (r(s)<0.32) return {text:'+'+n+' fuel... and then company shows up.', next:fightNext([U.pick(s, s.region===0?['conman','snake']:['krewe','conman'])],{reward:'cooler'})}; return {text:'+'+n+' fuel and a cooler. Efficient!', next:{loot:['cooler']}}; } },
+     { t:'Do both (takes a while: eats supplies)', go:function(s){ var n=U.ri(s,2,3); L.give(s,'fuel',n); L.linger(s,0.5); if (r(s)<0.32) return {text:'+'+n+' fuel... and then company shows up.', next:fightNext([U.pick(s, [['conman','snake'],['krewe','conman'],['outlaw','conman'],['outlaw','coyote']][s.region])],{reward:'cooler'})}; return {text:'+'+n+' fuel and a cooler. Efficient!', next:{loot:['cooler']}}; } },
    ]; } },
  { id:'diner', at:['diner'], bg:'stop_diner',
    text:'A chrome diner with every booth empty. The coffee machine somehow still works. The pie case is... let\'s not.',
@@ -26,11 +26,11 @@ L.EVENTS = [
  { id:'camp', at:['camp'], bg:'stop_camp',
    text:function(s){ return 'A perfect spot to camp. The fire crackles. Biscuit curls up by your boots.'+(s.hiker?' '+s.hiker.n+' tunes the guitar.':''); },
    choices:function(s){ var k=s.van.mods.kitchen; var h=[4,7,10,13][k]; return [
-     { t:'Make camp (+'+h+' HP, Biscuit heals, -1 food, Heat +0.6)', go:function(s){ var full = L.hasCombo(s,'beachbum'); L.heal(s, full?99:h + (s.hiker?3:0)); s.dog.hp=L.dogMax(s); if (s.dog.hurt>0) s.dog.hurt=Math.max(0,s.dog.hurt-1); if (s.dog.hurt===0 && s.dog.hp<=0) s.dog.hp=L.dogMax(s); s.res.food=Math.max(0,s.res.food-1); s.heat+=0.6; L.bond(s,1); if (k>=3) L.heal(s,2); return {text:'You sleep under a sky full of stars. No alarm clock. No commute. Just crickets.'+(full?' (Beach Bum: fully healed!)':'')}; } },
+     { t:'Make camp (+'+h+' HP, Biscuit heals, -1 food, takes the night)', go:function(s){ var full = L.hasCombo(s,'beachbum'); L.heal(s, full?99:h + (s.hiker?3:0)); s.dog.hp=L.dogMax(s); if (s.dog.hurt>0) s.dog.hurt=Math.max(0,s.dog.hurt-1); if (s.dog.hurt===0 && s.dog.hp<=0) s.dog.hp=L.dogMax(s); s.res.food=Math.max(0,s.res.food-1); L.linger(s,0.5); L.bond(s,1); if (k>=3) L.heal(s,2); return {text:'You sleep under a sky full of stars. No alarm clock. No commute. Just crickets.'+(full?' (Beach Bum: fully healed!)':'')}; } },
      { t:'Pet Biscuit, fix Marigold a bit, push on', go:function(s){ L.bond(s,1); s.van.hp=Math.min(L.vanMax(s),s.van.hp+2); return {text:'A quick belly rub and a tightened bolt. +bond, +2 Marigold.'}; } },
    ]; } },
  { id:'mail', at:['mail'], bg:'stop_camp', who:'npc_mailman',
-   text:function(s){ return '"Neither heat nor gators nor the end of the world," says the Mailman, tipping his cap. "Got something for you, actually."' + (s.flags.gift?'':' He hands you a postcard with a palm tree on it.'); },
+   text:function(s){ return '"Neither rain nor gators nor the end of the world," says the Mailman, tipping his cap. "Got something for you, actually."' + (s.flags.gift?'':' He hands you a postcard with a palm tree on it.'); },
    choices:function(s){ var best = s.pack.filter(function(it){ return L.SLOTS.indexOf(L.ITEMS[it.k].slot)>=0; }).sort(function(a,b){ return L.gearScore(b)-L.gearScore(a); })[0];
      return [
      { t:'Take the care package (+2 treats, +2 food)', go:function(s){ L.give(s,'treats',2); L.give(s,'food',2); return {text:'"From a friend down the road." It smells like peanut butter. Biscuit approves.'}; } },
@@ -40,7 +40,7 @@ L.EVENTS = [
    text:'BIG JUICY, the World\'s Happiest Juice Can, grins at the highway. Flamingo lawn ornaments stand guard. The gift shop is open. There is no one in the gift shop.',
    choices:function(s){ return [
      { t:'Browse the gift shop (4 batteries)', req:function(s){ return s.res.batteries>=4; }, go:function(s){ s.res.batteries-=4; L.offerSouvenir(s, L.dash.random(s,3), 'Big Juicy Gift Shop'); return {text:'You leave 4 batteries on the counter, because you are a good person.'}; } },
-     { t:'Climb Big Juicy for the view', go:function(s){ s.map.nodes.forEach(function(n){ n.seen=true; }); s.heat+=0.3; return {text:'From the top you can see for miles. Every mystery stop is revealed.'}; } },
+     { t:'Climb Big Juicy for the view', go:function(s){ s.map.nodes.forEach(function(n){ n.seen=true; }); L.linger(s,0.3); return {text:'From the top you can see for miles. Every mystery stop is revealed.'}; } },
      { t:'Lick Big Juicy', go:function(s){ if (r(s)<0.5){ L.heal(s,4); return {text:'It tastes like orange creamsicle. How?? +4 HP.'}; } s.hp-=2; return {text:'It tastes like fiberglass. Of course it does. -2 HP. Biscuit is embarrassed for you.'}; } },
    ]; } },
  { id:'golf', at:['attraction','event'], region:[0], bg:'stop_attraction', once:1,
@@ -90,7 +90,7 @@ L.EVENTS = [
  { id:'flamingos', at:['event'], region:[0],
    text:'Flamingo traffic jam. Two hundred pink birds are standing on the highway, being fabulous.',
    choices:function(s){ return [
-     { t:'Wait it out (Heat +0.4, +2 HP)', go:function(s){ s.heat+=0.4; L.heal(s,2); return {text:'You put your feet on the dash and enjoy the show.'}; } },
+     { t:'Wait it out (+2 HP, eats supplies)', go:function(s){ L.linger(s,0.5); L.heal(s,2); return {text:'You put your feet on the dash and enjoy the show.'}; } },
      { t:'Let Biscuit herd them', go:function(s){ if (s.dog.bond>=3){ L.bond(s,1); return {text:'Biscuit gently moves them aside like a pink-feathered professional. +bond'}; } s.res.food=Math.max(0,s.res.food-1); return {text:'Biscuit gets chased by the flamingos. They also eat your sandwich. -1 food.'}; } },
      { t:'Honk', go:function(s){ if (r(s)<0.4) return {text:'They scatter... revealing a very annoyed gator.', next:fightNext(['gator'],{})}; return {text:'They scatter in a pink explosion. Gorgeous.'}; } },
    ]; } },
@@ -123,7 +123,7 @@ L.EVENTS = [
  { id:'roadgator', at:['event'], region:[0],
    text:'A gator is sunbathing across BOTH lanes. It is not in a hurry. It has never been in a hurry.',
    choices:function(s){ return [
-     { t:'Wait (Heat +0.5)', go:function(s){ s.heat+=0.5; return {text:'Forty minutes later, it waddles off. You learned patience.'}; } },
+     { t:'Wait (eats supplies)', go:function(s){ L.linger(s,0.6); return {text:'Forty minutes later, it waddles off. You learned patience.'}; } },
      { t:'Biscuit, bark!', req:function(s){ return s.dog.hurt===0; }, go:function(s){ if (s.dog.bond>=2 || r(s)<0.5){ L.bond(s,1); return {text:'WOOF. The gator sighs and slides into the canal. Good boy!'}; } return {text:'The gator does not respect Biscuit. It charges!', next:fightNext(['gator'],{})}; } },
      { t:'Honk aggressively', go:function(s){ return {text:'It wakes up angry.', next:fightNext(['gator'],{reward:'crate'})}; } },
    ]; } },
@@ -132,6 +132,85 @@ L.EVENTS = [
    choices:function(s){ return [
      { t:'Open it up', go:function(s){ return {text:'Inside: a lockbox and a stack of comic books.', next:{loot:['lockbox']}}; } },
      { t:'Leave supplies for the next one (-1 food, +2 HP)', req:function(s){ return s.res.food>=1; }, go:function(s){ s.res.food--; L.heal(s,2); L.bond(s,1); return {text:'You leave a can of beans and a drawing of Biscuit. Good karma +1.'}; } },
+   ]; } },
+ // ---------- Texas ----------
+ { id:'rosa', at:['event','attraction','camp'], region:[2], once:1, who:'npc_rosa', bg:'stop_town',
+   text:'"Well butter my biscuit - is that a BISCUIT?" Grandma Rosa, retired rodeo champion, lassos your side mirror to make you stop. "Nobody drives through my town without supper."',
+   choices:function(s){ return [
+     { t:'Stay for supper (+6 HP, +3 food)', go:function(s){ L.heal(s,6); L.give(s,'food',3); L.bond(s,1); return {text:'Brisket, beans and a pie the size of a hubcap. Biscuit gets the bone. Rosa tells you the rodeo clowns are "mostly harmless. Except Kevin."'}; } },
+     { t:'Ask her to teach you the lasso (+1 gear)', go:function(s){ var it=L.mkItem(s, U.pick(s,['gloves','boots','leather']), 2, -1); if (s.pack.length<L.packCap(s)) s.pack.push(it); s.flags.rosa=1; return {text:'You catch a fence post on try nine. Rosa hollers like you won state. She gives you her old '+L.iname(it)+'.'}; } },
+     { t:'Trade with her (her shop is in the barn)', go:function(s){ return {text:'"Batteries only, sugar."', next:{trader:'dot'}}; } },
+   ]; } },
+ { id:'boot', at:['attraction','event'], region:[2], once:1, bg:'stop_attraction',
+   text:'THE WORLD\'S LARGEST COWBOY BOOT, forty feet tall, spur and all. There is a door in the heel. There is a gift shop in the toe.',
+   choices:function(s){ return [
+     { t:'Raid the gift shop', go:function(s){ return {text:'Bolo ties, snow globes, a suspicious amount of jerky.', next:{loot:['crate','cooler']}}; } },
+     { t:'Climb to the top of the boot', go:function(s){ s.map.nodes.forEach(function(n){ n.seen=true; }); L.linger(s,0.3); return {text:'From the cuff you see the whole map. And the rodeo arena. And a bear in a hat. Every stop revealed.'}; } },
+     { t:'Take a photo with Biscuit in the boot', go:function(s){ L.bond(s,2); return {text:'He looks like the world\'s smallest cowboy. +2 bond.'}; } },
+   ]; } },
+ { id:'trucker', at:['event','gas','diner'], region:[2,3], once:1, who:'npc_trucker',
+   text:'"Breaker breaker, little green van." A trucker named Big Wendell is idling at the pumps with a full tanker. "Been talking to nobody but the CB for a year. You got stories?"',
+   choices:function(s){ return [
+     { t:'Swap road stories (+4 fuel)', go:function(s){ L.give(s,'fuel',4); return {text:'You tell him about Big Al. He laughs so hard he honks the horn. He tops you off. +4 fuel.'}; } },
+     { t:'Ask for a tow and tune-up (+5 Marigold)', go:function(s){ s.van.hp=Math.min(L.vanMax(s), s.van.hp+5); return {text:'He tightens everything that rattles and a few things that didn\'t. Marigold purrs. +5'}; } },
+     { t:'Trade CB frequencies (reveal the map)', go:function(s){ s.map.nodes.forEach(function(n){ n.seen=true; }); return {text:'"Channel 19 knows everything." Every mystery on the map is revealed.'}; } },
+   ]; } },
+ { id:'tumble', at:['event'], region:[2],
+   text:'A tumbleweed the size of a hatchback rolls across the road. Then another. Then about forty.',
+   choices:function(s){ return [
+     { t:'Floor it through (-2 Marigold)', go:function(s){ s.van.hp-=2; return {text:'Thwump. Thwump. Thwumpthwumpthwump. Marigold has tumbleweed in her grille for the rest of the trip.'}; } },
+     { t:'Wait for the stampede to pass (eats supplies)', go:function(s){ L.linger(s,0.6); L.heal(s,2); return {text:'You watch the parade. It\'s honestly beautiful. +2 HP'}; } },
+     { t:'Biscuit, fetch one!', req:function(s){ return s.dog.hurt===0; }, go:function(s){ L.bond(s,1); if (r(s)<0.5){ L.give(s,'parts',2); return {text:'He drags back a tumbleweed with a whole hubcap tangled in it. +2 parts!'}; } return {text:'He comes back covered in burrs, very proud. +bond'}; } },
+   ]; } },
+ { id:'cattle', at:['event'], region:[2],
+   text:'Longhorns. On the road. Several hundred of them. One is looking directly at Marigold\'s mint paint job like it wants a lick.',
+   choices:function(s){ return [
+     { t:'Let Biscuit herd them', req:function(s){ return s.dog.hurt===0; }, go:function(s){ if (s.dog.bond>=3 || r(s)<0.5){ L.bond(s,1); L.give(s,'food',1); return {text:'Born for this. Retrievers can herd, it turns out, if they believe. A grateful ranch cat gives you a sandwich. +1 food'}; } return {text:'A bull disagrees with Biscuit\'s leadership.', next:fightNext(['boar'],{reward:'crate'})}; } },
+     { t:'Take the back road (+1 fuel)', go:function(s){ s.res.fuel=Math.max(0,s.res.fuel-1); return {text:'A scenic detour past a dinosaur track. Worth it.'}; } },
+   ]; } },
+ { id:'rodeo', at:['attraction','danger'], region:[2], once:1, bg:'stop_town',
+   text:'The empty rodeo grounds. A mechanical bull still blinks "READY" on a battery. A trophy case glitters in the office.',
+   choices:function(s){ return [
+     { t:'Ride the mechanical bull (risky, prize)', go:function(s){ if (r(s)<0.55){ L.give(s,'batteries',6); return {text:'EIGHT SECONDS. You are a legend in a town of zero. +6 batteries from the prize jar.'}; } s.hp-=3; return {text:'It throws you into the hay bales. -3 HP, +1 dignity lesson.'}; } },
+     { t:'Break into the trophy case', go:function(s){ return {text:'The rodeo clowns left a guard.', next:fightNext(['outlaw'],{reward:'safe'})}; } },
+   ]; } },
+ // ---------- Route 66 / Mojave ----------
+ { id:'neon', at:['attraction','event'], region:[3], once:1, bg:'stop_motel',
+   text:'The Starlite Motel. Half the neon still buzzes. The pool is empty except for a very relaxed tortoise.',
+   choices:function(s){ var h=[6,9,12,15][s.van.mods.kitchen]; return [
+     { t:'Sleep in a real bed (+'+h+' HP, eats supplies)', go:function(s){ L.heal(s,h); L.linger(s,0.6); L.bond(s,1); return {text:'Clean sheets. A TV that only shows snow. Biscuit hogs the pillow. Perfect.'}; } },
+     { t:'Search the rooms', go:function(s){ return {text:'Room 6 is unlocked. Room 6 is always unlocked.', next:{loot:['crate','lockbox']}}; } },
+     { t:'Turn the sign all the way on', go:function(s){ L.give(s,'batteries',-Math.min(2,s.res.batteries)); L.heal(s,3); return {text:'You spend 2 batteries and the whole sign blazes pink and gold. You sit on the roof and feel like the last person in a postcard. +3 HP'}; } },
+   ]; } },
+ { id:'dinos', at:['attraction','event'], region:[3], once:1, bg:'stop_attraction',
+   text:'Two concrete dinosaurs stand by the highway: Rex and Dottie. Someone has put sunglasses on Dottie. There\'s a gift shop in Rex\'s belly.',
+   choices:function(s){ return [
+     { t:'Shop inside the T-Rex', go:function(s){ return {text:'Plastic dinos, rock candy, and a crate behind the register.', next:{loot:['crate','cooler']}}; } },
+     { t:'Picnic in Dottie\'s shade (+4 HP, -1 food)', go:function(s){ s.res.food=Math.max(0,s.res.food-1); L.heal(s,4); L.bond(s,1); return {text:'Biscuit barks at Rex for ten minutes. Rex does not bark back. Biscuit wins.'}; } },
+   ]; } },
+ { id:'crater', at:['event'], region:[3], once:1,
+   text:'A meteor crater. A tour sign says "ASK ABOUT THE ROCK." There\'s nobody to ask. There is, however, the rock, and it\'s glowing a little.',
+   choices:function(s){ return [
+     { t:'Chip off a piece (sell it later)', go:function(s){ L.give(s,'batteries',5); return {text:'It hums. You decide not to think about it. +5 batteries worth of space rock.'}; } },
+     { t:'Climb down to the lost-and-found', go:function(s){ if (r(s)<0.45) return {text:'Something lives down here. Something with a tail.', next:fightNext(['scorpion'],{reward:'lockbox'})}; return {text:'A tourist\'s backpack!', next:{loot:['lockbox']}}; } },
+   ]; } },
+ { id:'mirage', at:['event'], region:[3],
+   text:'Shimmering on the horizon: a gas station with a FULL water tower. Or a mirage. Biscuit\'s tail is wagging. Biscuit has been wrong before.',
+   choices:function(s){ return [
+     { t:'Trust Biscuit', go:function(s){ if (r(s)<0.5+0.05*s.dog.bond){ L.give(s,'fuel',3); L.give(s,'food',1); L.bond(s,1); return {text:'It\'s REAL. +3 fuel, +1 food. Biscuit is insufferable about it.'}; } s.res.fuel=Math.max(0,s.res.fuel-1); return {text:'It was a mirage. You burned 1 fuel finding out. Biscuit pretends he never saw it.'}; } },
+     { t:'Stay on the road', go:function(s){ return {text:'Responsible. Boring. Probably right.'}; } },
+   ]; } },
+ { id:'sandstorm', at:['event'], region:[3],
+   text:'A wall of sand is rolling in from the south. Sunset turns orange, then brown, then everything.',
+   choices:function(s){ return [
+     { t:'Hunker down (eats supplies, safe)', go:function(s){ L.linger(s,1); return {text:'You and Biscuit play cards in the back. He cheats.'}; } },
+     { t:'Drive blind (-3 Marigold, +1 fuel saved)', go:function(s){ s.van.hp-=3; L.give(s,'fuel',1); return {text:'Marigold comes out sandblasted to a fresh new shine. Kind of.'}; } },
+   ]; } },
+ { id:'windmill', at:['event','camp'], region:[3], once:1,
+   text:'The wind farm on the pass is still turning. A maintenance shed hums with stored power. The ocean is on the other side of this mountain.',
+   choices:function(s){ return [
+     { t:'Charge up (+6 batteries)', go:function(s){ L.give(s,'batteries',6); return {text:'Every battery you own goes full. The turbines whoosh like applause.'}; } },
+     { t:'Use the workshop (+4 Marigold, +2 parts)', go:function(s){ s.van.hp=Math.min(L.vanMax(s), s.van.hp+4); L.give(s,'parts',2); return {text:'A real workshop. You give Marigold a spa day.'}; } },
    ]; } },
 ];
 })(typeof LRT!=='undefined'?LRT:require('./data.js'));

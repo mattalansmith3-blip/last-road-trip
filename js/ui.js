@@ -17,7 +17,7 @@ var toastBox = document.getElementById('toasts');
 function toast(t,k){ var lc=toastBox.lastChild; if (lc && lc.textContent===t) return; var d=document.createElement('div'); d.className='toast '+(k||''); d.textContent=t; toastBox.appendChild(d); while (toastBox.children.length>2) toastBox.removeChild(toastBox.firstChild); setTimeout(function(){ if (d.parentNode) d.parentNode.removeChild(d); }, 4200); }
 function flushLog(){ if (!s) return; s.log.forEach(function(m){ if (m.id>ui.logSeen){ ui.logSeen=m.id; if (s.screen!=='fight' || m.k!=='info') toast(m.t,m.k); } }); }
 function checkAch(){ if (!s) return; var F=s.flags, got=[];
-  var cond = { fl_done:F.fl_done, gulf_done:F.gulf_done, sunspire:F.sunspire, legend:F.legend, dash5:F.dash5, combo:F.combo, goodboy:F.goodboy, scrapper:(meta.scrapped+s.stats.scrapped)>=25, pacifist:(meta.talks+s.stats.talks)>=3, first_trip: s.screen==='end'||s.screen==='finale' };
+  var cond = { fl_done:F.fl_done, gulf_done:F.gulf_done, tx_done:F.tx_done, mojave_done:F.mojave_done, sunspire:F.sunspire, legend:F.legend, dash5:F.dash5, combo:F.combo, goodboy:F.goodboy, scrapper:(meta.scrapped+s.stats.scrapped)>=25, pacifist:(meta.talks+s.stats.talks)>=3, first_trip: s.screen==='end'||s.screen==='finale' };
   L.ACH.forEach(function(a){ if (cond[a.id] && !meta.ach[a.id]){ meta.ach[a.id]=Date.now(); got.push(a); } });
   if (got.length){ saveMeta(); got.forEach(function(a){ toast('Achievement unlocked: '+a.n+' - '+a.d,'ach'); AU.sfx('sv'); }); }
 }
@@ -32,7 +32,7 @@ function finishRun(){ if (!s || s.metaDone) return; s.metaDone=true; meta.runs++
 // ---------- actions ----------
 function act(fn){ return function(d){ var r = fn(d); after(); return r; }; }
 function after(){ if (!s) { render(); return; } if ((s.screen==='end'||s.screen==='finale') && !s.metaDone) finishRun(); checkAch(); save(); render(); flushLog(); }
-function newGame(daily){ var gift = meta.mailed ? meta.mailed : null; meta.mailed=null; saveMeta();
+function newGame(daily){ ui.fin=0; var gift = meta.mailed ? meta.mailed : null; meta.mailed=null; saveMeta();
   var seed = daily ? (function(){ var d=new Date(); return (d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate())*7919; })() : 0;
   s = L.newRun({ seed:seed, daily:daily, gift:gift }); ui.logSeen = 0; ui.ov=null; ui.sel=null;
   if (gift) L.say(s,'The Mailman left a package on your seat: your own '+L.iname(gift)+' from your last trip. Past you is the best.','good');
@@ -163,6 +163,7 @@ function render(){
   if (ui.ov) h += overlay();
   if (s.offer) h += offerModal();
   app.innerHTML = h;
+  var sk=s.screen+'|'+(ui.ov||''); if (ui.lastSk && ui.lastSk!==sk){ while (toastBox.firstChild) toastBox.removeChild(toastBox.firstChild); } ui.lastSk=sk;
   if (s.screen==='map') layoutMap();
   if (s.screen==='fight') playFx();
   if (s.screen==='finale') confetti();
@@ -185,7 +186,7 @@ function titleOv(){
 }
 function howTo(){ return '<div class="txt">'+
   '<p><b>Drive west.</b> Tap a glowing stop on the map, then Drive. Every drive burns fuel and food.</p>'+
-  '<p><b>The Heat is behind you.</b> The orange glow creeps along the map. Searching, camping and waiting let it catch up - if it reaches you, it hurts. Keep moving!</p>'+
+  '<p><b>Take your time - it costs you.</b> Every drive burns fuel and food, and Marigold wears out (more the further west you go). Extra searches, camping and waiting eat supplies. Enemies get tougher each region.</p>'+
   '<p><b>Loot.</b> Crates, coolers, lockboxes and safes. Let Biscuit sniff first - he can smell what\'s good. Take what you need and scrap the rest into parts.</p>'+
   '<p><b>Fights are turn-based.</b> Enemies show what they\'ll do next. A boar pawing the dirt will CHARGE. A rattling snake will bite. Read the tells - shove, brace, or let Biscuit bark them off.</p>'+
   '<p><b>Upgrade Marigold</b> in the Garage with parts and batteries. <b>Souvenirs</b> on the Dashboard give perks, and some pairs combo.</p>'+
@@ -199,14 +200,14 @@ function mapScreen(){
   var h='<div class="scr">'+hud()+'<div class="mapwrap" id="mw"><img class="bg" src="'+A(R.map)+'" alt="">';
   h+='<div class="regtag">'+esc(R.short)+' · Day '+s.day+'<small>Stop '+s.col+' of '+(L.COLS-1)+' · region '+(s.region+1)+' of '+L.REGIONS.length+'</small></div>';
   s.map.edges.forEach(function(e,i){ var past = s.map.nodes[e.a].done && s.map.nodes[e.b].done; h+='<div class="road'+(e.a===s.node?' live':'')+(e.rough?' rough':'')+(past?' past':'')+'" data-e="'+i+'"><img src="'+A('ui_road')+'" alt=""></div>'; });
-  var hc=Math.max(0, s.heat); h+='<div class="heat" id="heat"></div>';
+  
   s.map.nodes.forEach(function(n){ var p=nodePos(n), isLive=liveIds.indexOf(n.id)>=0, ic = (n.seen? L.NODE[n.type].icon : 'nd_mystery');
     var rough = isLive && live.filter(function(o){return o.node.id===n.id;})[0].rough;
     h+='<button class="node'+(n.done?' done':'')+(isLive?' live':'')+(!isLive&&!n.done?' far':'')+(ui.sel===n.id?' sel':'')+'" data-a="sel" data-i="'+n.id+'" style="left:'+p.x+'%;top:'+p.y+'%"><img src="'+A(ic)+'" alt="">'+(isLive?'<span class="nl">'+esc(n.seen?L.NODE[n.type].n:'???')+'</span>':'')+(rough?'<span class="rt">rough</span>':'')+'</button>'; });
   var cp=nodePos(s.map.nodes[s.node]); h+='<div class="vantok" style="left:'+cp.x+'%;top:'+cp.y+'%"><img src="'+A('van_34')+'" alt=""></div>';
   if (ui.sel!==null){ var n=s.map.nodes[ui.sel], o=live.filter(function(o){return o.node.id===ui.sel;})[0]; var fc=L.fuelCost(s)+(o.rough&&s.van.mods.tires<3?1:0); var eat=1+(s.hiker?1:0);
-    var desc = { scavenge:'Search an empty house. Loot! Maybe critters.', gas:'Siphon fuel and raid the snack shop.', diner:'Rest, eat, maybe a jukebox.', trader:'Dot\'s traveling shop. Buy, sell, gossip.', danger:'Trouble ahead - a fight, but better loot.', mystery:'Who knows? Could be great. Could be a trap.', attraction:'A weird roadside attraction. Souvenirs!', camp:'Rest and heal. The Heat creeps closer.', mail:'The Mailman. He always delivers.', goal:'The way out of '+L.REGIONS[s.region].short+'. Something big guards it.' }[n.seen?n.type:'mystery'];
-    var heatWarn = (s.heat + 0.95 >= n.col) ? '<div style="color:#c0391c;font-weight:900;margin-top:4px">The Heat will catch you here!</div>' : '';
+    var desc = { scavenge:'Search an empty house. Loot! Maybe critters.', gas:'Siphon fuel and raid the snack shop.', diner:'Rest, eat, maybe a jukebox.', trader:'Dot\'s traveling shop. Buy, sell, gossip.', danger:'Trouble ahead - a fight, but better loot.', mystery:'Who knows? Could be great. Could be a trap.', attraction:'A weird roadside attraction. Souvenirs!', camp:'Rest and heal. Costs a night of supplies.', mail:'The Mailman. He always delivers.', goal:'The way out of '+L.REGIONS[s.region].short+'. Something big guards it.' }[n.seen?n.type:'mystery'];
+    var heatWarn='';
     h+='<div class="sheet paper"><img class="ico" src="'+A(n.seen?L.NODE[n.type].icon:'nd_mystery')+'" alt=""><div class="card-t">'+esc(n.seen?L.NODE[n.type].n:'Mystery stop')+'</div><div class="txt" style="font-size:14px">'+esc(desc)+'</div><div class="muted" style="clear:both;padding-top:4px">Costs '+fc+' fuel'+(o.rough?' (rough road)':'')+', '+eat+' food</div>'+heatWarn+
       '<div class="row"><button class="btn teal" data-a="sel" data-i="'+n.id+'">Not yet</button><button class="btn" data-a="drive">Drive!</button></div></div>'; }
   else if (s.col===0 && s.region===0 && s.day===1) h+='<div class="sheet paper" style="pointer-events:none"><div class="card-t">Key West, Day 1</div><div class="txt" style="font-size:14px">Tap a glowing stop to plan your drive. Sunspire is far west - get to the end of each map.</div></div>';
@@ -216,15 +217,6 @@ function layoutMap(){
   var mw=document.getElementById('mw'); if(!mw) return; var W=mw.clientWidth, Hh=mw.clientHeight;
   // object-fit cover for square map: fine. roads
   s.map.edges.forEach(function(e,i){ var a=nodePos(s.map.nodes[e.a]), b=nodePos(s.map.nodes[e.b]); var ax=a.x*W/100, ay=a.y*Hh/100, bx=b.x*W/100, by=b.y*Hh/100; var len=Math.hypot(bx-ax,by-ay), ang=Math.atan2(by-ay,bx-ax)*180/Math.PI; var el=mw.querySelector('[data-e="'+i+'"]'); if(el){ el.style.left=ax+'px'; el.style.top=(ay-7)+'px'; el.style.width=len+'px'; el.style.transform='rotate('+ang+'deg)'; } });
-  // heat overlay: covers columns <= heat
-  var hp = s.heat; var hel=document.getElementById('heat'); if (hel){
-    var frac = Math.max(0,(hp+0.5)/(L.COLS-1));
-    if (land()){ var px=Math.min(100, 7 + frac*86); hel.style.cssText='left:0;top:0;bottom:0;width:'+px+'%;--hd:90deg'; }
-    else { var py=Math.min(100, 8 + frac*82); hel.style.cssText='left:0;right:0;bottom:0;height:'+py+'%;--hd:0deg'; }
-    var gap = Math.floor((s.col - s.heat)*10)/10; var lbl=document.createElement('div'); lbl.className='heatlbl';
-    lbl.textContent = s.heat<0 ? 'The Heat is far behind' : (gap<=1 ? 'THE HEAT IS RIGHT BEHIND YOU' : 'The Heat: '+gap.toFixed(1)+' stops behind');
-    if (land()){ lbl.style.left=Math.max(10,Math.min(px,90))+'%'; lbl.style.top='95%'; } else { lbl.style.left='50%'; lbl.style.top=(100-Math.max(4,Math.min(py,96)))+'%'; }
-    mw.appendChild(lbl); }
 }
 function stopScreen(){
   var st=s.stop, ev=L.EVENTS.filter(function(e){return e.id===st.ev;})[0]; var R=L.REGIONS[s.region];
@@ -234,7 +226,7 @@ function stopScreen(){
   else if (st.ev==='juniper') h+='<img class="who" src="'+A('npc_hiker')+'" alt="">';
   h+='<div class="dock"><div class="paper">';
   if (st.again){
-    h+='<div class="card-t">'+esc(L.NODE[st.type]?L.NODE[st.type].n:'')+'</div><div class="txt">There might be more in here. Each search takes time (the Heat creeps up) and gets riskier.</div><div class="choices"><button class="btn" data-a="again">Search another room<small>Heat +0.35 · risky</small></button><button class="btn teal" data-a="leavestop">Back to the road</button></div>';
+    h+='<div class="card-t">'+esc(L.NODE[st.type]?L.NODE[st.type].n:'')+'</div><div class="txt">There might be more in here. Each search takes time (eats supplies) and gets riskier.</div><div class="choices"><button class="btn" data-a="again">Search another room<small>eats supplies · risky</small></button><button class="btn teal" data-a="leavestop">Back to the road</button></div>';
   } else if (!st.result){
     h+='<div class="card-t">'+esc((st.type==='event'||st.type==='mystery')?'Something on the road':(L.NODE[st.type]?L.NODE[st.type].n:''))+'</div><div class="txt">'+esc(st.text)+'</div><div class="choices">';
     ev.choices(s).forEach(function(c,i){ var ok=!c.req||c.req(s); h+='<button class="btn'+(i%2?' teal':'')+(ok?'':' off')+'" data-a="choose" data-i="'+i+'" '+(ok?'':'disabled')+'><span class="col" style="align-items:flex-start">'+esc(c.t)+(ok?'':'<span class="why">Can\'t right now</span>')+'</span></button>'; });
@@ -341,7 +333,7 @@ function traderScreen(){
   if (t.sv && !t.svSold){ var S=L.SOUVENIRS[t.sv]; h+='<div class="sec">Souvenir</div><div class="sv"><img src="'+A('sv_'+t.sv)+'" alt=""><div style="flex:1"><div class="nm">'+esc(S.n)+'</div><div class="muted">'+esc(S.d)+'</div></div><button class="btn sm'+(s.res.batteries>=t.svPrice?'':' off')+'" data-a="buysv">'+t.svPrice+' bat.</button></div>'; }
   h+='<div class="sec">Supplies</div><div class="svc">'+t.svc.map(function(o,i){ return '<button class="btn sm teal'+(s.res.batteries>=o.cost?'':' off')+'" data-a="svc" data-i="'+i+'"><span class="col">'+esc(o.n)+'<small>'+o.cost+' batteries</small></span></button>'; }).join('')+'</div>';
   h+='<div class="sec">Sell from your pack</div>'+(s.pack.length? '<div class="stock">'+s.pack.map(function(it,i){ return itemCard(it,'<button class="btn xs teal" data-a="sell" data-i="'+i+'">Sell +'+L.ival(it)+'</button>'); }).join('')+'</div><div class="choices"><button class="btn teal sm" data-a="selljunk">Sell all junk</button></div>' : '<div class="muted">Your pack is empty.</div>');
-  h+='<div class="choices"><button class="btn" data-a="leavetrade">Back on the road</button></div></div></div></div>'+foot()+'</div>';
+  h+='</div><div class="pinleave"><button class="btn" data-a="leavetrade">Back on the road</button></div></div></div>'+foot()+'</div>';
   return h;
 }
 function regionScreen(){
@@ -349,9 +341,19 @@ function regionScreen(){
   return '<div class="scr"><img class="bg" src="'+A(R1.map)+'" alt="" style="filter:brightness(.75)"><div class="center"><div class="big">'+esc(R0.short)+': done!</div><div class="paper" style="max-width:480px;width:100%"><div class="card-t">Next: '+esc(R1.n)+'</div><div class="txt">'+esc(R1.blurb)+'</div><div class="statrow" style="margin-top:8px"><span>Day '+s.day+'</span><span>'+s.stats.kills+' bested</span><span>Bond '+s.dog.bond+'/10</span><span>'+s.dash.length+' souvenirs</span></div><div class="muted">Your dashboard gets one more slot. You patch yourself up a little (+4 HP).</div><div class="choices"><button class="btn teal" data-a="ov" data-v="garage">Visit the garage first</button><button class="btn" data-a="region">Drive on!</button></div></div></div></div>';
 }
 function finaleScreen(){
-  var mins = Math.round((Date.now()-s.stats.t0)/60000);
-  return '<div class="scr fin"><div class="finwrap"><img class="bg" src="'+A('finale')+'" alt=""><div class="sunsign">SUNSPIRE</div></div><div class="center"><div class="paper"><div class="card-t">You made it to Sunspire Park!</div><div class="txt">The gates swing open. The Seashell Palace is lit up like a birthday cake. A giant Sunny the Pelican waves, and he\'s not a statue, he\'s a person in a costume, and there are more people. Music. Churros. Biscuit runs straight for the churros.</div><div class="statrow" style="margin-top:8px"><span>Day '+s.day+'</span><span>'+mins+' min</span><span>'+s.stats.kills+' bested</span><span>'+s.stats.talks+' talked down</span><span>Bond '+s.dog.bond+'/10</span></div><div style="display:flex;gap:4px;margin:6px 0">'+s.dash.map(function(k){ return '<img src="'+A('sv_'+k)+'" style="height:34px">'; }).join('')+'</div><div class="choices"><button class="btn" data-a="home">Back to the title</button></div></div></div></div>';
+  var mins = Math.round((Date.now()-s.stats.t0)/60000), st=ui.fin||0, F=s.flags;
+  var friends=[{k:'npc_dot',n:'Dot & Ziggy',m:F.metDot,l:'"Told you the lights were real, hon!"'},{k:'npc_hiker',n:'Juniper',m:F.ev_juniper,l:'Plays the song about Biscuit. The whole crowd knows the words.'},{k:'npc_velvet',n:'Chez Velvet',m:F.ev_velvet,l:F.velvet==='rival'?'"You took my limo parts. ...Okay, you can be in my vlog."':'"BESTIE! We made it! Say hi to the fans!"'},{k:'npc_rosa',n:'Grandma Rosa',m:F.ev_rosa,l:'Lassos you into a hug from twenty feet away.'},{k:'npc_trucker',n:'Big Wendell',m:F.ev_trucker,l:'"Breaker breaker, welcome home, little green van."'},{k:'npc_mailman',n:'The Mailman',m:true,l:'"Special delivery." It\'s a churro.'}].filter(function(f){return f.m;});
+  var h='<div class="scr fin st'+st+'"><div class="finwrap"><img class="bg" src="'+A(st===2?'postcard':'finale_palace')+'" alt=""></div><div class="center"><div class="paper">';
+  if (st===0){
+    h+='<div class="card-t">Sunspire Park</div><div class="txt">You roll up to the gates at sunset. Everything is dark. Then - <b class="pu p1">click.</b> <span class="pu p2">The carousel lights up.</span> <span class="pu p3">The Ferris wheel spins awake, bulb by bulb.</span> <span class="pu p4">The Seashell Palace glows like a birthday cake.</span> <span class="pu p5">Fireworks. Music. Someone is cheering. A lot of someones.</span></div><div class="choices"><button class="btn" data-a="finnext">Walk up to the palace</button></div>';
+  } else if (st===1){
+    h+='<div class="card-t">Friends waiting at the palace</div><div class="txt" style="font-size:14px">Sunny the Pelican (a very sweaty person in a costume) opens the gates. Biscuit runs straight for the churros.</div><div class="friends">'+friends.map(function(f){ return '<div class="fr"><img src="'+A(f.k)+'" alt=""><div><b>'+esc(f.n)+'</b><div class="muted">'+esc(f.l)+'</div></div></div>'; }).join('')+'</div><div class="choices"><button class="btn" data-a="finnext">Write a postcard home</button></div>';
+  } else {
+    h+='<div class="pc"><div class="pcmsg">Made it to Sunspire! Day '+s.day+'. Marigold is fine (mostly). Biscuit has eaten '+(3+s.dog.bond)+' churros. Wish you were here - actually, come here. The lights are on. Love, me &amp; B.</div></div><div class="statrow" style="margin-top:8px"><span>Day '+s.day+'</span><span>'+mins+' min</span><span>'+s.stats.kills+' bested</span><span>'+s.stats.talks+' talked down</span><span>Bond '+s.dog.bond+'/10</span></div><div style="display:flex;gap:4px;margin:6px 0">'+s.dash.map(function(k){ return '<img src="'+A('sv_'+k)+'" style="height:34px">'; }).join('')+'</div><div class="choices"><button class="btn" data-a="home">Back to the title</button></div>';
+  }
+  return h+'</div></div></div>';
 }
+H.finnext = function(){ ui.fin=(ui.fin||0)+1; AU.sfx('sv'); render(); };
 function confetti(){ var keys=['sv_sun','sv_pelican','it_treat','sv_flamingo','sv_hula','sv_disco']; var box=app.querySelector('.fin'); if(!box) return; for (var i=0;i<18;i++){ var im=document.createElement('img'); im.src=A(keys[i%keys.length]); im.className='confetti'; im.style.left=(Math.random()*95)+'%'; im.style.width=(28+Math.random()*30)+'px'; im.style.animationDuration=(3+Math.random()*4)+'s'; im.style.animationDelay=(Math.random()*3)+'s'; box.appendChild(im); } }
 function endScreen(){
   var why = s.ended&&s.ended.why; var R=L.REGIONS[s.region];
