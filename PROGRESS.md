@@ -6,3 +6,7 @@
 - Art: 106 generated assets; text rendered in code. Audio: WebAudio synthesized.
 - Tests: real-tap Playwright runs at 390x844 and 844x390; balance bot ~39% win.
 - Next: Texas + Mojave regions, finale at Sunspire Park, balance to 20–40 min.
+
+## Loops 1–3 (2026-11-04 PT)
+- Fixed portrait fight arena collapse, toast spam, landscape loot cutoff. Live real-tap runs at both sizes: 0 errors, 0 offscreen issues.
+- Gaps: Texas/Mojave + Sunspire finale regions not yet built; garage not hit by tap bot; fuel economy harsh.
