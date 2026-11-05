@@ -246,5 +246,5 @@ button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:poin
 .pc .pcmsg{font-family:Fredoka;font-weight:400;font-size:17px;line-height:1.35;color:#3a2a6a;transform:rotate(-1.5deg);padding:4px 2px}
 .trade .dock{height:70%}
 @media (orientation:landscape){.trade .dock{height:calc(100% - 16px)}}
-.fin .center{position:relative;z-index:30}
+.fin .center{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:8px}
 @media (orientation:landscape){.banner-img{max-height:28vh;aspect-ratio:auto!important;height:28vh}.banner-img .bg{object-fit:cover}}
