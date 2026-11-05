@@ -18,3 +18,9 @@
 - Finale: 3 beats — rides power up, friends you met waiting at the palace, a postcard home.
 - Heat chase removed entirely (per Matthew). Pacing pressure is now resource tension: per-drive fuel/food, lingering eats supplies, Marigold wear rises by region, enemies scale by region.
 - Fixes: toasts clear on screen change (no radio overlap), trader Leave pinned, garage covered by real-tap tests.
+
+## Wrap-up (2026-11-04 PT)
+- Live real-tap loops (GitHub Pages build): portrait and landscape both played Florida → Gulf → Texas → Mojave → finale (all 3 finale beats) with 0 JS errors; garage upgrades/repairs tapped and verified (state changed).
+- Fixes: landscape garage banner shrunk so upgrade buttons are on screen; region-arrival heal 14; play.py medkit loop bug fixed.
+- Balance bot (1500 runs): ~39% win, avg ~28 min est (4 s/action), ~19 drives, ~11 fights won.
+- Gaps: no hand-timed human run; the bot's minutes figure is an estimate.

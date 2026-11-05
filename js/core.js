@@ -541,7 +541,7 @@ function regionDone(s){
   if (s.region >= L.REGIONS.length-1){ s.screen='finale'; s.ended={why:'win', t:Date.now()}; s.flags.sunspire=1; return; }
   s.screen='region'; s.regionCard = { from:s.region, to:s.region+1 };
 }
-function nextRegion(s){ s.region++; genMap(s); s.screen='map'; s.regionCard=null; s.hp=Math.min(hpMax(s), s.hp+12); give(s,'food',2); s.van.hp=Math.min(vanMax(s), s.van.hp+3); give(s,'fuel',2); say(s,'Welcome to '+L.REGIONS[s.region].n+'. '+L.REGIONS[s.region].blurb,'story'); }
+function nextRegion(s){ s.region++; genMap(s); s.screen='map'; s.regionCard=null; s.hp=Math.min(hpMax(s), s.hp+14); give(s,'food',2); s.van.hp=Math.min(vanMax(s), s.van.hp+3); give(s,'fuel',2); say(s,'Welcome to '+L.REGIONS[s.region].n+'. '+L.REGIONS[s.region].blurb,'story'); }
 L.nextRegion = nextRegion;
 function endRun(s, why){ s.screen='end'; s.ended = { why:why, t:Date.now() }; return true; }
 L.endRun = endRun;

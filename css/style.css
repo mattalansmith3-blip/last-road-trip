@@ -247,3 +247,4 @@ button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:poin
 .trade .dock{height:70%}
 @media (orientation:landscape){.trade .dock{height:calc(100% - 16px)}}
 .fin .center{position:relative;z-index:30}
+@media (orientation:landscape){.banner-img{max-height:28vh;aspect-ratio:auto!important;height:28vh}.banner-img .bg{object-fit:cover}}
