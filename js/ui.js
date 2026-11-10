@@ -50,7 +50,13 @@ addEventListener('resize', kick); addEventListener('orientationchange', kick);
 if (window.visualViewport) window.visualViewport.addEventListener('resize', kick);
 if (window.matchMedia) { const mq = window.matchMedia('(orientation: landscape)'); (mq.addEventListener ? mq.addEventListener('change', kick) : mq.addListener(kick)); }
 // a soft fade and a chevron when a panel has more below the fold
-U.scrollCue = () => { document.querySelectorAll('.panel').forEach(p => { const upd = () => p.classList.toggle('more', p.scrollHeight - p.clientHeight - p.scrollTop > 10); if (!p.__cue) { p.__cue = 1; p.addEventListener('scroll', upd, { passive:true }); } upd(); setTimeout(upd, 300); }); };
+// panels with a pinned action bar: scrolling content above, the bar below it (never on top of the content)
+U.splitPanels = () => { document.querySelectorAll('.panel').forEach(p => {
+  const old = p.querySelector(':scope > .pscroll'); if (old) { while (old.firstChild) p.insertBefore(old.firstChild, old); old.remove(); p.classList.remove('split'); }
+  const bar = p.querySelector('.pin-act'); if (!bar) return;
+  const sc = h('div', { class:'pscroll' }); while (p.firstChild) sc.append(p.firstChild); p.append(sc); p.classList.add('split'); p.append(bar); }); };
+U.scroller = p => (p && p.querySelector(':scope > .pscroll')) || p;
+U.scrollCue = () => { document.querySelectorAll('.panel').forEach(pp => { const p = U.scroller(pp); const upd = () => p.classList.toggle('more', p.scrollHeight - p.clientHeight - p.scrollTop > 10); if (!p.__cue) { p.__cue = 1; p.addEventListener('scroll', upd, { passive:true }); } upd(); setTimeout(upd, 300); }); };
 
 // ---------- toasts, sheets ----------
 let toastT = null;
@@ -92,8 +98,8 @@ const META = ['van', 'pack', 'book', 'menu', 'sunspire', 'howto'];
 U.go = (name, arg) => { if (META.indexOf(name) >= 0 && META.indexOf(S.screen) < 0) S.prev = [S.screen, S.arg]; S.screen = name; S.arg = arg; U.render(); };
 U.back = () => { const p = S.prev || [S.G ? 'scene' : 'title']; U.go(p[0], p[1]); };
 U.render = () => {
-  const app = $('#app'); const oldP = $('.panel'); const keepTop = (oldP && S._rs === S.screen + ':' + (S.G ? S.G.node : '')) ? oldP.scrollTop : 0; app.innerHTML = ''; U.closeSheet(); if (U.stopLoops) U.stopLoops();
-  const fn = screens[S.screen]; if (!fn) return; if (U.setMusic) U.setMusic(); const el = fn(S.arg); app.append(el); S._rs = S.screen + ':' + (S.G ? S.G.node : ''); U.layout(); const np = $('.panel'); if (np && keepTop) np.scrollTop = keepTop; U.scrollCue(); if (el.__after) el.__after(); save();
+  const app = $('#app'); const oldP = $('.panel'); const keepTop = (oldP && S._rs === S.screen + ':' + (S.G ? S.G.node : '')) ? U.scroller(oldP).scrollTop : 0; app.innerHTML = ''; U.closeSheet(); if (U.stopLoops) U.stopLoops();
+  const fn = screens[S.screen]; if (!fn) return; if (U.setMusic) U.setMusic(); const el = fn(S.arg); app.append(el); S._rs = S.screen + ':' + (S.G ? S.G.node : ''); U.layout(); U.splitPanels(); const np = U.scroller($('.panel')); if (np && keepTop) np.scrollTop = keepTop; U.scrollCue(); if (el.__after) el.__after(); save();
 };
 U.refresh = () => { const sc = S.screen; U.render(); };
 // gains: chips describing what changed

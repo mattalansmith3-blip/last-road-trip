@@ -22,21 +22,22 @@ function spotBox(s, k) {
   const sprIdx = { crate:0, cooler:1, lockbox:2, safe:3, mailbox:4 }[s.box] + (s.open ? 5 : 0);
   return h('button', { class:'sbox' + (s.open ? ' open' : ''), style:'left:' + s.x * 100 + '%;top:' + s.y * 100 + '%', 'data-a':'box-' + k, onclick:e => { e.stopPropagation(); const inn = $('.art-in'), n = S.G.nodes[S.G.node]; if (inn && n.spots) { const r = inn.getBoundingClientRect(), nx = (e.clientX - r.left) / r.width, ny = (e.clientY - r.top) / r.height, dd = q => Math.hypot(q.x - nx, (q.y - ny) * 1.1), db = dd(s); if (n.spots.some(q => !q.got && dd(q) < .15 && dd(q) < db)) { U.lookAt(e, inn); return; } } U.openBox(s); } }, sp('containers', sprIdx, 'boximg', s.box));
 }
+U.foundText = n => { const found = n.spots.filter(s => s.got).length; return n.looksLeft > 0 ? 'Tap the picture to look closer. ' + found + ' of ' + n.spots.length + ' hidden things found. A find gives the look back.' : 'You have looked everywhere you can here. ' + found + ' of ' + n.spots.length + ' hidden things found.'; };
 U.lookAt = (e, inner) => {
   const G = S.G, n = G.nodes[G.node]; if (!n.spots) return; const r = inner.getBoundingClientRect(); const nx = (e.clientX - r.left) / r.width, ny = (e.clientY - r.top) / r.height;
   U.ripple(inner, nx, ny);
   if (n.looksLeft <= 0) { U.toast('You have looked everywhere you can here.'); return; }
   const res = C.look(G, nx, ny);
   if (res.hit) { sfx(res.box ? 'open' : 'find'); if (res.box) { inner.__spots.append(spotBox(res.hit, n.spots.indexOf(res.hit))); U.toast('A ' + res.hit.box + '. Tap it to open.'); } else { U.found(res.fx); } }
-  else { sfx('miss'); }
+  else { sfx('miss'); U.toast('Nothing here. ' + n.looksLeft + (n.looksLeft === 1 ? ' look left.' : ' looks left.'), 1400); }
   U.updateChrome();
 };
 U.ripple = (inner, x, y) => { const d = h('div', { class:'ripple', style:'left:' + x * 100 + '%;top:' + y * 100 + '%' }); inner.append(d); setTimeout(() => d.remove(), 700); };
-U.found = fx => { const G = S.G; const out = h('div', null, U.gains(fx.filter(o => o.k !== 'full')));  if (!fx.filter(o => o.k !== 'full').length) out.append(h('span', null, 'Nothing but rust and dust.')); U.toast(out, 2600); U.handleFull(fx, () => U.updateChrome()); };
+U.found = fx => { const G = S.G; const out = h('div', null, U.gains(fx.filter(o => o.k !== 'full')));  if (!fx.filter(o => o.k !== 'full').length) out.append(h('span', null, 'Just rust and an empty can. It still counts as found, and you keep the look.')); U.toast(out, 2600); U.handleFull(fx, () => U.updateChrome()); };
 U.updateChrome = () => {
-  const G = S.G, hud = $('.hud'); if (hud) hud.replaceWith(U.hud()); const n = G.nodes[G.node]; const lk = $('.looks b'); if (lk) lk.textContent = n.looksLeft;
+  const G = S.G, hud = $('.hud'); if (hud) hud.replaceWith(U.hud()); const n = G.nodes[G.node]; const lk = $('.looks b'); if (lk) lk.textContent = n.looksLeft; const fh = $('.foundhint'); if (fh && n.spots) fh.textContent = U.foundText(n);
   const nose = $('.nose span'); if (nose) nose.textContent = n.sniffed ? (G.treats > 0 ? 'Nose · 1 treat' : 'Nose · no treats') : 'Biscuit\'s nose';
-  const pnl = $('.panel'); if (pnl && S.screen === 'scene') { pnl.innerHTML = ''; pnl.append(U.scenePanel()); } U.save();
+  const pnl = $('.panel'); if (pnl && S.screen === 'scene') { const keep = U.scroller(pnl).scrollTop; pnl.innerHTML = ''; pnl.append(U.scenePanel()); pnl.classList.remove('split'); U.splitPanels(); U.scroller(pnl).scrollTop = keep; U.scrollCue(); } U.save();
 };
 U.sniff = inner => {
   const G = S.G, n = G.nodes[G.node]; if (!n.spots) return; if (n.sniffed && G.treats < 1) { U.toast('Biscuit would like a treat first.'); return; }
@@ -85,7 +86,7 @@ U.scenePanel = () => {
   const blocked = S.ev && S.ev.res && S.ev.res.r;
   // actions
   const act = h('div', { class:'acts' });
-  if (n.spots) { const found = n.spots.filter(s => s.got).length; act.append(h('p', { class:'hint' }, n.looksLeft > 0 ? 'Tap the picture to look closer. ' + found + ' of ' + n.spots.length + ' things found.' : 'You have found what there is to find here (' + found + ' of ' + n.spots.length + ').')); }
+  if (n.spots) act.append(h('p', { class:'hint foundhint' }, U.foundText(n)));
   if (type === 'wonder') {
     if (n.restored) act.append(h('p', { class:'ok' }, wd.done));
     else { const cost = C.wonderCost(G, G.node); act.append(U.btn(wd.verb, () => U.restore(), { cls:'btn-r', dis:G.parts < cost, sub:'Costs ' + cost + ' parts and an hour' + (G.parts < cost ? ' · you have ' + G.parts : ''), a:'restore' })); }
