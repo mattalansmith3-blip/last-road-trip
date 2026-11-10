@@ -24,3 +24,27 @@
 - Fixes: landscape garage banner shrunk so upgrade buttons are on screen; region-arrival heal 14; play.py medkit loop bug fixed.
 - Balance bot (1500 runs): ~39% win, avg ~28 min est (4 s/action), ~19 drives, ~11 fights won.
 - Gaps: no hand-timed human run; the bot's minutes figure is an estimate.
+
+# v2 "Road Atlas" redesign (2026-11-10 PT)
+The v1 combat game was replaced by a full rewrite. Because the rewrite touched every file, the first three milestones landed in one build; each is logged separately below.
+
+## v2 Milestone 1 — Phase 0 fixes, combat removed, new encounters
+- Combat, enemies, containers-as-loot-minigame and the Heat chase are gone (old assets deleted).
+- Economy: fuel and food costs rebalanced so a normal trip cannot spiral; HUD cells are labelled (Fuel, Food, Batteries, Parts, Treats, Spirit, Van wear); a sheet warns before a drive you cannot afford; selling asks for confirmation; coach cards teach the HUD, looking around, and the first upgrade; Mara in Florida guarantees the first upgrade (4 parts, rack blueprint known).
+- New systems: 8-hour daylight days (night driving costs wear and Spirit), weather with a forecast, Van Wear and Spirit meters, Tow instead of game over.
+- Encounters: Standoff (Calm ring), Roadblock (tags solved by tools), Haggle (tags and gifts), Close Call (3-lane real-time dodge). Each region ends with a Crossing chaining two or three encounters.
+- Fonts: Fredoka/Nunito replaced by Barlow, Barlow Condensed and Caveat (all OFL, bundled).
+
+## v2 Milestone 2 — Exploration
+- Fogged atlas that clears as you travel, hidden side roads unlocked by clues from characters, tap-to-search scenes with limited looks, Biscuit's nose (spends a treat to point at what is left), 12 restorable Wonders, a 42-page Scrapbook, 6 Mixtapes (synthesized in WebAudio), per-region postcards.
+
+## v2 Milestone 3 — Upgrades and meta
+- Six hardpoints (roof, front, wheels, rear, side, cab), two parts each, with weight and a fuel penalty when heavy; blueprints persist between trips; 6 passengers with perks; Sunspire Park lights one lamp per restored Wonder permanently; Gentle Mode (calmer animals, slower roads, extra Close Call tolerance, unlimited tows).
+
+## v2 Milestone 4/5 — Art and copy
+- All illustrations, icons and textures were generated in a single gouache style and cut/converted to webp (assets/ ~4 MB). Layout, route strokes, the fog mask, Calm ring, bars and all text are code.
+- Copy rewritten in a plain, sincere voice. Landscape: Pack, Scrapbook and Menu now use the full width.
+
+## v2 test results
+- Balance bot (500 runs each): reach Sunspire 100% at reflex skill .8, 91.8% at .65, 77% at .6, 34% at .5; median run 28-31 min. Gentle Mode at skill .7: 100%, median 26.8 min.
+- Real-tap Playwright (390x844 and 844x390): 0 JS errors. The tap bot occasionally stalls in landscape on a scene with a locked box or an unreached spot; this has not been reproduced as a game bug.

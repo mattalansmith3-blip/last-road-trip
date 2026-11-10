@@ -1,423 +1,227 @@
-// The Last Road Trip — UI layer (DOM). All art is generated images; code only lays out and writes text.
-(function(){
-var L = LRT, app = document.getElementById('app');
-var s = null, ui = { ov:null, sel:null, tgt:null, items:false, fx:null, logSeen:0, revealed:{}, hint:'', anim:false };
-var meta = loadMeta();
-function A(n){ return 'assets/'+n+'.webp'; }
-function esc(t){ return String(t).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
-function land(){ return innerWidth > innerHeight; }
-function loadMeta(){ try { return Object.assign({runs:0,wins:0,best:0,ach:{},mailed:null,postcards:[],talks:0,scrapped:0,velvet:null,bestTime:0}, JSON.parse(localStorage.getItem('lrt_meta')||'{}')); } catch(e){ return {runs:0,wins:0,best:0,ach:{},mailed:null,postcards:[],talks:0,scrapped:0}; } }
-function saveMeta(){ localStorage.setItem('lrt_meta', JSON.stringify(meta)); }
-function save(){ if (!s) return; if (s.screen==='end' || s.screen==='finale') localStorage.removeItem('lrt_save'); else localStorage.setItem('lrt_save', JSON.stringify(s)); }
-function loadSave(){ try { var t=localStorage.getItem('lrt_save'); return t?JSON.parse(t):null; } catch(e){ return null; } }
-window.__lrt = { get s(){ return s; }, L:L, get ui(){ return ui; }, render:function(){ render(); } };
-
-// ---------- toasts / achievements ----------
-var toastBox = document.getElementById('toasts');
-function toast(t,k){ var lc=toastBox.lastChild; if (lc && lc.textContent===t) return; var d=document.createElement('div'); d.className='toast '+(k||''); d.textContent=t; toastBox.appendChild(d); while (toastBox.children.length>2) toastBox.removeChild(toastBox.firstChild); setTimeout(function(){ if (d.parentNode) d.parentNode.removeChild(d); }, 4200); }
-function flushLog(){ if (!s) return; s.log.forEach(function(m){ if (m.id>ui.logSeen){ ui.logSeen=m.id; if (s.screen!=='fight' || m.k!=='info') toast(m.t,m.k); } }); }
-function checkAch(){ if (!s) return; var F=s.flags, got=[];
-  var cond = { fl_done:F.fl_done, gulf_done:F.gulf_done, tx_done:F.tx_done, mojave_done:F.mojave_done, sunspire:F.sunspire, legend:F.legend, dash5:F.dash5, combo:F.combo, goodboy:F.goodboy, scrapper:(meta.scrapped+s.stats.scrapped)>=25, pacifist:(meta.talks+s.stats.talks)>=3, first_trip: s.screen==='end'||s.screen==='finale' };
-  L.ACH.forEach(function(a){ if (cond[a.id] && !meta.ach[a.id]){ meta.ach[a.id]=Date.now(); got.push(a); } });
-  if (got.length){ saveMeta(); got.forEach(function(a){ toast('Achievement unlocked: '+a.n+' - '+a.d,'ach'); AU.sfx('sv'); }); }
-}
-function finishRun(){ if (!s || s.metaDone) return; s.metaDone=true; meta.runs++; meta.talks+=s.stats.talks; meta.scrapped+=s.stats.scrapped;
-  var won = s.screen==='finale'; if (won) meta.wins++;
-  meta.best = Math.max(meta.best, Math.round(L.progress(s)*100));
-  if (s.mailed){ meta.mailed = s.mailed; }
-  if (s.flags.velvet) meta.velvet = s.flags.velvet;
-  meta.postcards.unshift({ d:new Date().toLocaleDateString(), won:won, reg:L.REGIONS[Math.min(s.region,L.REGIONS.length-1)].short, day:s.day, kills:s.stats.kills, dash:s.dash.slice(0), why:s.ended&&s.ended.why });
-  meta.postcards = meta.postcards.slice(0,12); saveMeta(); checkAch(); }
-
-// ---------- actions ----------
-function act(fn){ return function(d){ var r = fn(d); after(); return r; }; }
-function after(){ if (!s) { render(); return; } if ((s.screen==='end'||s.screen==='finale') && !s.metaDone) finishRun(); checkAch(); save(); render(); flushLog(); }
-function newGame(daily){ ui.fin=0; var gift = meta.mailed ? meta.mailed : null; meta.mailed=null; saveMeta();
-  var seed = daily ? (function(){ var d=new Date(); return (d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate())*7919; })() : 0;
-  s = L.newRun({ seed:seed, daily:daily, gift:gift }); ui.logSeen = 0; ui.ov=null; ui.sel=null;
-  if (gift) L.say(s,'The Mailman left a package on your seat: your own '+L.iname(gift)+' from your last trip. Past you is the best.','good');
-  if (meta.velvet==='rival') L.say(s,'Somewhere, Chez Velvet is livestreaming about you. She remembers the limo.','story');
-  after(); }
-var H = {
-  newgame: function(){ AU.sfx('tap'); if (loadSave() && !confirm('Start a new trip? Your current trip will be lost.')) return; newGame(false); },
-  daily: function(){ newGame(true); },
-  cont: function(){ s = loadSave(); if (!s) return; ui.logSeen = s.logId; after(); },
-  home: function(){ save(); s=null; ui.ov=null; render(); },
-  mute: function(){ AU.setMute(!AU.muted); render(); },
-  ov: function(d){ AU.sfx('tap'); ui.ov = d.v || null; ui.pk=null; render(); },
-  // map
-  sel: function(d){ var id=+d.i; if (!L.nextNodes(s).some(function(o){ return o.node.id===id; })) return; AU.sfx('tap'); ui.sel = ui.sel===id?null:id; render(); },
-  drive: function(){ if (ui.sel===null||ui.anim) return; var id=ui.sel; ui.anim=true; AU.sfx('drive');
-    var tok = app.querySelector('.vantok'), nd = app.querySelector('.node[data-i="'+id+'"]');
-    if (tok && nd){ tok.style.left = nd.style.left; tok.style.top = nd.style.top; }
-    setTimeout(function(){ ui.anim=false; ui.sel=null; ui.revealed={}; ui.hint=''; L.travel(s,id); if (s.screen==='fight') enterFight(); after(); }, tok?950:10); },
-  // stops
-  choose: act(function(d){ AU.sfx('tap'); L.choose(s,+d.i); }),
-  proceed: function(){ L.proceed(s); if (s.screen==='fight') enterFight(); after(); },
-  again: function(){ L.loot.again(s); if (s.screen==='fight') enterFight(); ui.revealed={}; after(); },
-  leavestop: act(function(){ L.toMap(s); }),
-  // loot
-  sniff: function(){ if (L.loot.sniff(s)){ AU.sfx('bark'); var c=L.loot.cur(s); var it=c.items[c.sniff-1]; ui.hint = 'Biscuit smells: '+(it.r>=3?'something AMAZING (legendary!)':it.r>=2?'something fancy (rare)':it.r>=1?'something decent':'mostly junk, honestly'); } after(); },
-  open: function(d){ var ok=L.loot.open(s,d.how); if (!ok){ toast(d.how==='pick'?'No lockpicks!':'Not enough parts to force it.','warn'); return; } AU.sfx('open'); var c=L.loot.cur(s); ui.hint=''; var w=app.querySelector('.ctwrap'); if (w) w.classList.add('shake');
-    c.items.forEach(function(it,i){ setTimeout(function(){ AU.sfx('r'+it.r); }, 450+i*330); }); setTimeout(after, 380); },
-  take: function(d){ var c=L.loot.cur(s); var it=c.items[+d.i]; if (!L.loot.take(s,+d.i)){ toast('Your pack is full! Scrap or drop something first.','warn'); return; } AU.sfx(L.ITEMS[it.k].slot==='res'?'coin':'tap'); after(); },
-  scrap: function(d){ if (L.loot.scrap(s,+d.i)) AU.sfx('scrap'); after(); },
-  takeall: function(){ var c=L.loot.cur(s), before=c.taken.filter(Boolean).length; L.loot.takeAll(s); if (c.items.some(function(x,i){return !c.taken[i];})) toast('Pack is full - scrap the rest or make room.','warn'); AU.sfx('coin'); after(); },
-  scrapjunk: function(){ L.loot.scrapJunk(s); AU.sfx('scrap'); after(); },
-  nextc: function(){ ui.hint=''; L.loot.next(s); after(); },
-  // pack
-  pk: function(d){ ui.pk = (ui.pk===d.i)?null:d.i; render(); },
-  equip: function(d){ if (L.pack.equip(s,+d.i)) AU.sfx('up'); ui.pk=null; after(); },
-  use: function(d){ var it=s.pack[+d.i]; if (L.pack.use(s,+d.i)){ AU.sfx(L.ITEMS[it.k].toy?'bark':'heal'); } else toast('That would not do anything right now.','warn'); ui.pk=null; after(); },
-  scrapp: function(d){ L.pack.scrap(s,+d.i); AU.sfx('scrap'); ui.pk=null; after(); },
-  scrapjunkp: function(){ var n=L.pack.scrapJunk(s); toast(n?('Scrapped '+n+' junk items into parts.'):'Nothing junky to scrap.', n?'good':''); AU.sfx('scrap'); after(); },
-  treat: function(){ if (L.pack.treat(s)) AU.sfx('bark'); else toast('No treats left!','warn'); after(); },
-  // garage
-  upg: function(d){ if (L.garage.upgrade(s,d.m)) AU.sfx('up'); else toast('Not enough parts or batteries.','warn'); after(); },
-  repair: function(){ if (L.garage.repair(s)) AU.sfx('up'); else toast('Nothing to fix, or no parts.','warn'); after(); },
-  // dash
-  drop: function(d){ L.dash.drop(s,d.k); AU.sfx('scrap'); after(); },
-  takeoffer: function(d){ if (!L.takeOffer(s,d.k)){ toast('Dashboard is full - toss a souvenir to make room.','warn'); ui.swap=true; render(); return; } AU.sfx(d.k?'sv':'tap'); ui.swap=false; after(); },
-  // trader
-  buy: function(d){ if (L.trade.buy(s,+d.i)) AU.sfx('coin'); else toast('Not enough batteries (or your pack is full).','warn'); after(); },
-  svc: function(d){ if (L.trade.svc(s,+d.i)) AU.sfx('coin'); else toast('Not enough batteries.','warn'); after(); },
-  buysv: function(){ if (L.trade.sv(s)) AU.sfx('sv'); else toast(s.dash.length>=L.dashCap(s)?'Dashboard is full.':'Not enough batteries.','warn'); after(); },
-  sell: function(d){ L.trade.sell(s,+d.i); AU.sfx('coin'); after(); },
-  selljunk: function(){ var r=L.trade.sellJunk(s); toast(r.n?('Sold '+r.n+' items for '+r.b+' batteries.'):'No junk to sell.', r.n?'good':''); AU.sfx('coin'); after(); },
-  leavetrade: act(function(){ L.trade.leave(s); }),
-  // fight
-  tgt: function(d){ ui.tgt=+d.i; AU.sfx('tap'); render(); },
-  fa: function(d){ fightDo(function(){ return L.heroAct(s, d.a, (d.a==='attack'||d.a==='power'||d.a==='shove'||d.a==='item')?ui.tgt:null, d.k); }, d.a); },
-  fd: function(d){ fightDo(function(){ return L.dogAct(s, d.a, ui.tgt); }, 'dog'); },
-  items: function(){ ui.items=!ui.items; render(); },
-  loot: function(){ L.afterFight(s); ui.revealed={}; after(); },
-  region: function(){ L.nextRegion(s); AU.music('road'); after(); },
+// The Last Road Trip v2 — interface. DOM only; the rules live in core.js.
+(function(L){
+const C = L.core, U = L.ui = {};
+const S = U.S = { meta:null, G:null, screen:null, sel:null, ev:null, busy:false, coached:{} };
+// ---------- helpers ----------
+const $ = (sel, el) => (el || document).querySelector(sel);
+const h = U.h = (tag, a, ...kids) => { const e = document.createElement(tag); if (a) for (const k in a) { const v = a[k]; if (v == null || v === false) continue; if (k === 'class') e.className = v; else if (k === 'style') e.style.cssText = v; else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v); else if (k === 'html') e.innerHTML = v; else e.setAttribute(k, v === true ? '' : v); } kids.forEach(k => add(e, k)); return e; };
+function add(e, c) { if (c == null || c === false) return; if (Array.isArray(c)) c.forEach(x => add(e, x)); else e.append(c.nodeType ? c : document.createTextNode(c)); }
+const im = U.im = (src, cls, alt) => h('img', { src, class:cls, alt:alt || '', draggable:'false' });
+const sp = U.sp = (set, i, cls, alt) => im(L.img(set, i), cls, alt);
+const RES = U.RES = { fuel:{ n:'Fuel', i:0, d:'Every drive burns some. Buy more at gas stops, or find it.' }, food:{ n:'Food', i:1, d:'One meal each night. Short on food and Spirit sinks.' }, batt:{ n:'Batteries', i:2, d:'What the road uses for money. Also powers the radio.' }, parts:{ n:'Parts', i:3, d:'For repairs, upgrades and restoring Wonders.' }, treats:{ n:'Treats', i:5, d:'Biscuit\'s nose works best on a full stomach.' } };
+const ico = U.ico = (k, cls) => sp('hud', L.HUD[k], cls || 'ico', k);
+U.pct = (a, b) => Math.round(100 * a / b) + '%';
+const plural = (n, w) => n + ' ' + w;
+U.itemInfo = (kind, id) => {
+  if (kind === 'gadget') { const g = L.GADGETS[id]; return { n:g.n, d:g.d, src:L.img('gadgets', g.i) }; }
+  if (kind === 'gift') { const g = L.GIFTS[id]; return { n:g.n, d:'Good for ' + g.tags.map(t => L.TAGN[t]).join(' and ') + '. Trade it in a Haggle.', src:L.img('gifts', g.i) }; }
+  if (kind === 'souv') { const g = L.SOUV[id]; return { n:g.n, d:g.d, src:L.img('souvenirs', g.i) }; }
+  if (kind === 'part') { const g = L.VPARTS[id]; return { n:g.n, d:g.d, src:L.img('parts', g.i) }; }
+  if (kind === 'pass') { const g = L.PASS[id]; return { n:g.n, d:g.d, src:L.img('friends', g.i) }; }
+  if (kind === 'tape') { const g = L.TAPE_BY_ID[id]; return { n:g.n, d:g.d, src:L.img('tapes', g.i) }; }
+  if (kind === 'bp') { const g = L.VPARTS[id]; return { n:'Blueprint: ' + g.n, d:g.d, src:L.img('parts', g.i) }; }
+  return { n:id, d:'', src:'' };
 };
-function enterFight(){ ui.tgt=null; ui.items=false; var f=s.fight; if (f){ var a=L.alive(f); ui.tgt = a.length? a[0].id : null; } AU.music('fight'); }
-function fightDo(fn, kind){
-  var f=s.fight; if (!f || f.over) return;
-  if ((kind==='attack'||kind==='power') && (ui.tgt===null || !L.canHit(s,f.foes[ui.tgt]))){ var c=L.alive(f).filter(function(e){ return L.canHit(s,e); })[0]; if (c) ui.tgt=c.id; }
-  var ok = fn(); if (!ok){ toast(kind==='shove'?'Shove needs a target right next to you.':kind==='dog'?'Biscuit can\'t do that right now.':kind==='talk'?'Only works on humans, once per fight.':'Can\'t do that - pick a target in range.','warn'); return; }
-  ui.items=false; ui.fx = (s.fight ? s.fight.fx.slice() : []); var sounds={};
-  ui.fx.forEach(function(x){ sounds[x.t==='hit'?(x.src==='crit'?'crit':'hit'):x.t==='miss'?'miss':x.t==='dmghero'?'hurt':x.t==='ko'?'ko':x.t==='bark'?'bark':x.t==='howl'?'howl':x.t==='heal'?'heal':''] = 1; });
-  if (kind==='dog' && s.fight && s.fight.fx.some(function(x){return x.t==='dogbite';})) sounds.bark=1;
-  Object.keys(sounds).forEach(function(k,i){ if (k) setTimeout(function(){ AU.sfx(k); }, i*90); });
-  if (s.fight && s.fight.over==='won'){ setTimeout(function(){ AU.sfx('win'); }, 300); }
-  if (s.screen==='end'){ AU.sfx('lose'); }
-  if (s.fight && L.alive(s.fight).length && (ui.tgt===null || s.fight.foes[ui.tgt].gone)) { var a=L.alive(s.fight); ui.tgt=a[0].id; }
-  after();
-}
+const save = U.save = () => {
+  try { localStorage.setItem('lrt2_meta', JSON.stringify(S.meta)); if (S.G && !S.G.ended && !S.G.won) localStorage.setItem('lrt2_run', JSON.stringify(S.G, (k, v) => k === 'meta' ? undefined : v)); else localStorage.removeItem('lrt2_run'); } catch (e) {}
+};
+U.loadMeta = () => { try { const m = JSON.parse(localStorage.getItem('lrt2_meta')); if (m && m.v === 2) { const f = C.freshMeta(); for (const k in f) if (!(k in m)) m[k] = f[k]; return m; } } catch (e) {} return C.freshMeta(); };
+U.loadRun = () => { try { const g = JSON.parse(localStorage.getItem('lrt2_run')); if (g && g.v === 2) { g.meta = S.meta; return g; } } catch (e) {} return null; };
+const sfx = U.sfx = n => { try { AU.sfx(n); } catch (e) {} };
 
-// ---------- common pieces ----------
-function hud(){
-  var lo = function(c){ return c?' low':''; };
-  return '<div class="hud">'+
-    '<div class="hpbar"><div class="lb"><span>You</span><span>'+Math.max(0,s.hp)+'/'+L.hpMax(s)+'</span></div><div class="bar"><i style="width:'+Math.max(0,100*s.hp/L.hpMax(s))+'%"></i></div>'+
-    '<div class="lb"><span>Marigold</span><span>'+s.van.hp+'/'+L.vanMax(s)+'</span></div><div class="bar van"><i style="width:'+Math.max(0,100*s.van.hp/L.vanMax(s))+'%"></i></div></div>'+
-    '<div class="sp"></div>'+
-    '<div class="st'+lo(s.res.fuel<3)+'"><img src="'+A('it_fuel')+'" alt="">'+s.res.fuel+'</div>'+
-    '<div class="st'+lo(s.res.food<2)+'"><img src="'+A('it_beans')+'" alt="">'+s.res.food+'</div>'+
-    '<div class="st"><img src="'+A('it_parts')+'" alt="">'+s.res.parts+'</div>'+
-    '<div class="st"><img src="'+A('it_battery')+'" alt="">'+s.res.batteries+'</div>'+
-    '<div class="st"><img src="'+A(s.dog.hurt>0?'dog_bow':'dog_sit')+'" alt="" style="'+(s.dog.hurt>0?'filter:grayscale(1)':'')+'">'+s.dog.bond+'</div>'+
-  '</div>';
-}
-function foot(){
-  var up = Object.keys(L.MODULES).some(function(m){ var c=L.garage.cost(s,m); return c && s.res.parts>=c.parts && s.res.batteries>=c.batteries; });
-  var better = s.pack.some(function(it){ var b=L.ITEMS[it.k]; return L.SLOTS.indexOf(b.slot)>=0 && (!s.gear[b.slot] || L.gearScore(it)>L.gearScore(s.gear[b.slot])); });
-  return '<div class="foot">'+
-    '<button class="fb" data-a="ov" data-v="pack"><img src="'+A('it_denim')+'" alt="">Pack '+s.pack.length+'/'+L.packCap(s)+(better?'<span class="badge">new</span>':'')+'</button>'+
-    '<button class="fb" data-a="ov" data-v="garage"><img src="'+A('van_side')+'" alt="">Garage'+(up?'<span class="badge">up</span>':'')+'</button>'+
-    '<button class="fb" data-a="ov" data-v="dash"><img src="'+A('sv_hula')+'" alt="">Dashboard '+s.dash.length+'/'+L.dashCap(s)+'</button>'+
-    '<button class="fb" data-a="ov" data-v="dog"><img src="'+A('dog_sit')+'" alt="">Biscuit</button>'+
-    '<button class="fb" data-a="ov" data-v="menu"><img src="'+A('sv_sun')+'" alt="">Menu</button>'+
-  '</div>';
-}
-function statLine(it){ var b=L.ITEMS[it.k], st=L.istat(it), p=[];
-  if (b.slot==='weapon'){ p.push(st.dmg+' dmg'); p.push(Math.round(st.acc*100)+'% hit'); p.push(st.range>1?('range '+st.range):'melee'); if (st.stun) p.push(Math.round(st.stun*100)+'% stun'); if (st.crit) p.push('+'+Math.round(st.crit*100)+'% crit'); if (st.beast) p.push('+'+st.beast+' vs animals'); if (st.human) p.push('+'+st.human+' vs humans'); if (st.leech) p.push('heal on KO'); if (b.splash) p.push('splash'); if (b.loud) p.push('loud'); }
-  else if (L.SLOTS.indexOf(b.slot)>=0){ if (st.armor) p.push('+'+st.armor+' armor'); if (st.hp) p.push('+'+st.hp+' max HP'); if (st.mdmg) p.push('+'+st.mdmg+' melee dmg'); if (st.flee) p.push('+'+Math.round(st.flee*100)+'% flee'); if (b.nocrit) p.push('no crits on you'); }
-  else if (b.slot==='res'){ return '+'+(b.amt + ((it.k==='parts'||it.k==='battery')?s.region:0))+' '+b.res; }
-  else return b.d||'';
-  if (it.a>=0 && L.SLOTS.indexOf(b.slot)>=0 && b.slot!=='weapon') p.push(L.AFFIX[it.a].d);
-  return p.join(' · ');
-}
-function isUp(it){ var b=L.ITEMS[it.k]; if (L.SLOTS.indexOf(b.slot)<0) return false; var cur=s.gear[b.slot]; return !cur || L.gearScore(it)>L.gearScore(cur); }
-function rname(it){ var b=L.ITEMS[it.k]; if (b.slot==='res') return 'Supplies'; if (b.slot==='junk') return 'Junk'; if (b.slot==='use') return 'Consumable'; return L.RARITY[it.r].name+' '+b.slot; }
-function itemCard(it, acts, extra){ var b=L.ITEMS[it.k]; var r = (b.slot==='res'||b.slot==='use'||b.slot==='junk')?(b.slot==='junk'?0:1):it.r;
-  return '<div class="it r'+r+' '+(extra||'')+'">'+(isUp(it)?'<span class="up">UPGRADE</span>':'')+'<img class="pic" src="'+A(b.img)+'" alt=""><div style="min-width:0;flex:1"><div class="rr">'+rname(it)+'</div><div class="nm">'+esc(L.iname(it))+'</div><div class="sl">'+esc(statLine(it))+'</div>'+(acts?'<div class="acts">'+acts+'</div>':'')+'</div></div>'; }
+// ---------- layout (art / map sizes are computed so spots and pins land where the painting says) ----------
+U.layout = () => {
+  const root = document.documentElement, W = innerWidth, H = innerHeight, land = W > H * 1.05;
+  document.body.classList.toggle('land', land);
+  const hud = $('.hud'), nav = $('.nav'); const hh = hud ? hud.offsetHeight : 90, nh = nav ? nav.offsetHeight : 56;
+  let aw, ah, mw, mh;
+  if (land) { ah = H; aw = Math.min(H, W * .46); mh = H; mw = mh * .75; }
+  else { aw = Math.min(W, 560); ah = Math.min(aw * .88, Math.max(220, H - hh - nh - 250)); const avail = H - hh - nh - 150; mw = Math.min(aw, Math.max(220, avail) * .75); mh = mw / .75; }
+  root.style.setProperty('--aw', Math.round(aw) + 'px'); root.style.setProperty('--ah', Math.round(ah) + 'px');
+  root.style.setProperty('--mw', Math.round(mw) + 'px'); root.style.setProperty('--mh', Math.round(mh) + 'px');
+  root.style.setProperty('--sq', Math.round(Math.max(aw, ah)) + 'px'); root.style.setProperty('--sqoff', Math.round(-(Math.max(aw, ah) - ah) * .6) + 'px');
+  if (S.screen === 'atlas') U.drawFog();
+};
+addEventListener('resize', () => setTimeout(U.layout, 60)); addEventListener('orientationchange', () => setTimeout(U.layout, 200));
 
-// ---------- screens ----------
-function render(){
-  if (!s){ app.innerHTML = titleScreen(); AU.music('calm'); return; }
-  var h='';
-  switch(s.screen){
-    case 'map': h=mapScreen(); AU.music(s.region===0?'road':'road'); break;
-    case 'stop': h=stopScreen(); AU.music('calm'); break;
-    case 'loot': h=lootScreen(); break;
-    case 'fight': h=fightScreen(); AU.music('fight'); break;
-    case 'trader': h=traderScreen(); AU.music('calm'); break;
-    case 'region': h=regionScreen(); AU.music('win'); break;
-    case 'finale': h=finaleScreen(); AU.music('win'); break;
-    case 'end': h=endScreen(); AU.music('calm'); break;
-  }
-  if (ui.ov) h += overlay();
-  if (s.offer) h += offerModal();
-  app.innerHTML = h;
-  var sk=s.screen+'|'+(ui.ov||''); if (ui.lastSk && ui.lastSk!==sk){ while (toastBox.firstChild) toastBox.removeChild(toastBox.firstChild); } ui.lastSk=sk;
-  if (s.screen==='map') layoutMap();
-  if (s.screen==='fight') playFx();
-  if (s.screen==='finale') confetti();
-}
-function titleScreen(){
-  var sv = loadSave(); var sub = meta.runs ? ('Trips: '+meta.runs+' · Made it to Sunspire: '+meta.wins+' · Best: '+meta.best+'% of the way') : 'Key West to Sunspire Park. One van. One very good dog.';
-  return '<div class="scr title"><img class="bg" src="'+A('key_art')+'" alt=""><div class="logo"><span>The</span>Last Road Trip</div>'+
-  '<div class="menu">'+(sv?'<button class="btn teal" data-a="cont">Continue trip<small>'+esc(L.REGIONS[sv.region].short)+' · Day '+sv.day+'</small></button>':'')+
-  '<button class="btn" data-a="newgame">'+(meta.runs?'New trip':'Start the trip')+(meta.mailed?'<small>A package is waiting for you</small>':'')+'</button>'+
-  '<button class="btn teal sm" data-a="daily">Daily Route<small>Same map for everyone today</small></button>'+
-  '<div style="display:flex;gap:8px"><button class="btn sm teal" style="flex:1" data-a="ovt" data-v="how">How to play</button><button class="btn sm teal" style="flex:1" data-a="ovt" data-v="post">Postcards</button><button class="btn sm teal" style="flex:1" data-a="mute">'+(AU.muted?'Sound off':'Sound on')+'</button></div>'+
-  '<div class="meta">'+esc(sub)+'</div></div>'+(ui.tov?titleOv():'')+'</div>';
-}
-function titleOv(){
-  var body='';
-  if (ui.tov==='how') body = howTo();
-  else { body = '<div class="sec">Achievements</div>'+L.ACH.map(function(a){ return '<div class="combo'+(meta.ach[a.id]?'':' no')+'">'+(meta.ach[a.id]?'★ ':'☆ ')+esc(a.n)+' <span class="muted">- '+esc(a.d)+'</span></div>'; }).join('')+
-    '<div class="sec">Postcards from past trips</div>'+(meta.postcards.length? meta.postcards.map(function(p){ return '<div class="pc" style="margin-bottom:8px"><b>'+(p.won?'Made it to Sunspire!':'Trip ended in '+esc(p.reg))+'</b><br><span class="muted">'+esc(p.d)+' · Day '+p.day+' · '+p.kills+' critters & creeps bested</span>'+(p.dash&&p.dash.length?'<div style="display:flex;gap:4px;margin-top:4px">'+p.dash.map(function(k){ return '<img src="'+A('sv_'+k)+'" style="height:28px">'; }).join('')+'</div>':'')+'</div>'; }).join('') : '<div class="muted">No postcards yet. Go make some memories.</div>'); }
-  return '<div class="ov"><div class="ovin"><div class="ovhd"><div class="h">'+(ui.tov==='how'?'How to play':'Postcards')+'</div><button class="x" data-a="ovt" data-v="">Close</button></div><div class="ovbody">'+body+'</div></div></div>';
-}
-function howTo(){ return '<div class="txt">'+
-  '<p><b>Drive west.</b> Tap a glowing stop on the map, then Drive. Every drive burns fuel and food.</p>'+
-  '<p><b>Take your time - it costs you.</b> Every drive burns fuel and food, and Marigold wears out (more the further west you go). Extra searches, camping and waiting eat supplies. Enemies get tougher each region.</p>'+
-  '<p><b>Loot.</b> Crates, coolers, lockboxes and safes. Let Biscuit sniff first - he can smell what\'s good. Take what you need and scrap the rest into parts.</p>'+
-  '<p><b>Fights are turn-based.</b> Enemies show what they\'ll do next. A boar pawing the dirt will CHARGE. A rattling snake will bite. Read the tells - shove, brace, or let Biscuit bark them off.</p>'+
-  '<p><b>Upgrade Marigold</b> in the Garage with parts and batteries. <b>Souvenirs</b> on the Dashboard give perks, and some pairs combo.</p>'+
-  '<p><b>Biscuit</b> gets braver as your bond grows. At bond 8 he\'ll save your life once per fight. Treats help. So does being nice.</p>'+
-  '<p>Reach the bridge at the end of each region, beat what\'s waiting, and keep going until you see the lights of Sunspire.</p></div>'; }
-H.ovt = function(d){ ui.tov = d.v||null; render(); };
+// ---------- toasts, sheets ----------
+let toastT = null;
+U.toast = (msg, ms) => { const t = $('#toasts'); t.innerHTML = ''; const e = h('div', { class:'toast' }, msg); t.append(e); clearTimeout(toastT); toastT = setTimeout(() => { e.classList.add('out'); setTimeout(() => e.remove(), 300); }, ms || 2300); };
+U.clearToast = () => { $('#toasts').innerHTML = ''; };
+const sheetEl = () => $('#sheet');
+U.sheet = (title, body, opts) => {
+  U.closeSheet(); opts = opts || {};
+  const back = h('div', { id:'sheet', class:'sheet-back', onclick:e => { if (e.target === back && !opts.sticky) U.closeSheet(); } },
+    h('div', { class:'sheet' + (opts.cls ? ' ' + opts.cls : '') }, title ? h('h2', null, title) : null, h('div', { class:'sheet-body' }, body), opts.actions ? h('div', { class:'sheet-actions' }, opts.actions) : null));
+  document.body.append(back); return back;
+};
+U.closeSheet = () => { const s = sheetEl(); if (s) s.remove(); };
+U.btn = (label, cb, o) => { o = o || {}; const b = h('button', { class:'btn ' + (o.cls || 'btn-c'), disabled:o.dis ? true : null, 'data-a':o.a, onclick:e => { if (b.disabled) return; sfx('tap'); cb(e); } }, h('span', { class:'bl' }, label), o.sub ? h('span', { class:'sub' }, o.sub) : null); return b; };
+U.confirm = (title, text, yes, onYes, no) => U.sheet(title, h('p', null, text), { actions:[U.btn(yes, () => { U.closeSheet(); onYes(); }, { cls:'btn-r', a:'confirm' }), U.btn(no || 'Never mind', U.closeSheet, { a:'cancel' })] });
 
-function nodePos(n){ if (land()) return { x: 7 + n.x*86, y: 14 + n.y*74 }; return { x: 12 + n.y*76, y: 92 - n.x*82 }; }
-function mapScreen(){
-  var R=L.REGIONS[s.region], live=L.nextNodes(s), liveIds=live.map(function(o){return o.node.id;});
-  var h='<div class="scr">'+hud()+'<div class="mapwrap" id="mw"><img class="bg" src="'+A(R.map)+'" alt="">';
-  h+='<div class="regtag">'+esc(R.short)+' · Day '+s.day+'<small>Stop '+s.col+' of '+(L.COLS-1)+' · region '+(s.region+1)+' of '+L.REGIONS.length+'</small></div>';
-  s.map.edges.forEach(function(e,i){ var past = s.map.nodes[e.a].done && s.map.nodes[e.b].done; h+='<div class="road'+(e.a===s.node?' live':'')+(e.rough?' rough':'')+(past?' past':'')+'" data-e="'+i+'"><img src="'+A('ui_road')+'" alt=""></div>'; });
-  
-  s.map.nodes.forEach(function(n){ var p=nodePos(n), isLive=liveIds.indexOf(n.id)>=0, ic = (n.seen? L.NODE[n.type].icon : 'nd_mystery');
-    var rough = isLive && live.filter(function(o){return o.node.id===n.id;})[0].rough;
-    h+='<button class="node'+(n.done?' done':'')+(isLive?' live':'')+(!isLive&&!n.done?' far':'')+(ui.sel===n.id?' sel':'')+'" data-a="sel" data-i="'+n.id+'" style="left:'+p.x+'%;top:'+p.y+'%"><img src="'+A(ic)+'" alt="">'+(isLive?'<span class="nl">'+esc(n.seen?L.NODE[n.type].n:'???')+'</span>':'')+(rough?'<span class="rt">rough</span>':'')+'</button>'; });
-  var cp=nodePos(s.map.nodes[s.node]); h+='<div class="vantok" style="left:'+cp.x+'%;top:'+cp.y+'%"><img src="'+A('van_34')+'" alt=""></div>';
-  if (ui.sel!==null){ var n=s.map.nodes[ui.sel], o=live.filter(function(o){return o.node.id===ui.sel;})[0]; var fc=L.fuelCost(s)+(o.rough&&s.van.mods.tires<3?1:0); var eat=1+(s.hiker?1:0);
-    var desc = { scavenge:'Search an empty house. Loot! Maybe critters.', gas:'Siphon fuel and raid the snack shop.', diner:'Rest, eat, maybe a jukebox.', trader:'Dot\'s traveling shop. Buy, sell, gossip.', danger:'Trouble ahead - a fight, but better loot.', mystery:'Who knows? Could be great. Could be a trap.', attraction:'A weird roadside attraction. Souvenirs!', camp:'Rest and heal. Costs a night of supplies.', mail:'The Mailman. He always delivers.', goal:'The way out of '+L.REGIONS[s.region].short+'. Something big guards it.' }[n.seen?n.type:'mystery'];
-    var heatWarn='';
-    h+='<div class="sheet paper"><img class="ico" src="'+A(n.seen?L.NODE[n.type].icon:'nd_mystery')+'" alt=""><div class="card-t">'+esc(n.seen?L.NODE[n.type].n:'Mystery stop')+'</div><div class="txt" style="font-size:14px">'+esc(desc)+'</div><div class="muted" style="clear:both;padding-top:4px">Costs '+fc+' fuel'+(o.rough?' (rough road)':'')+', '+eat+' food</div>'+heatWarn+
-      '<div class="row"><button class="btn teal" data-a="sel" data-i="'+n.id+'">Not yet</button><button class="btn" data-a="drive">Drive!</button></div></div>'; }
-  else if (s.col===0 && s.region===0 && s.day===1) h+='<div class="sheet paper" style="pointer-events:none"><div class="card-t">Key West, Day 1</div><div class="txt" style="font-size:14px">Tap a glowing stop to plan your drive. Sunspire is far west - get to the end of each map.</div></div>';
-  return h+'</div>'+foot()+'</div>';
-}
-function layoutMap(){
-  var mw=document.getElementById('mw'); if(!mw) return; var W=mw.clientWidth, Hh=mw.clientHeight;
-  // object-fit cover for square map: fine. roads
-  s.map.edges.forEach(function(e,i){ var a=nodePos(s.map.nodes[e.a]), b=nodePos(s.map.nodes[e.b]); var ax=a.x*W/100, ay=a.y*Hh/100, bx=b.x*W/100, by=b.y*Hh/100; var len=Math.hypot(bx-ax,by-ay), ang=Math.atan2(by-ay,bx-ax)*180/Math.PI; var el=mw.querySelector('[data-e="'+i+'"]'); if(el){ el.style.left=ax+'px'; el.style.top=(ay-7)+'px'; el.style.width=len+'px'; el.style.transform='rotate('+ang+'deg)'; } });
-}
-function stopScreen(){
-  var st=s.stop, ev=L.EVENTS.filter(function(e){return e.id===st.ev;})[0]; var R=L.REGIONS[s.region];
-  var bg = st.bg || (st.type==='scavenge'? (s.region===0?'stop_house':'stop_cottage') : (st.type==='mystery'||st.type==='event')? R.fight : st.type==='diner'?'stop_diner': st.type==='camp'?'stop_camp': st.type==='attraction'?'stop_attraction': R.stops[0]);
-  var h='<div class="scr">'+hud()+'<div class="stage"><img class="bg" src="'+A(bg)+'" alt="">';
-  if (ev && ev.who) h+='<img class="who" src="'+A(ev.who)+'" alt="">';
-  else if (st.ev==='juniper') h+='<img class="who" src="'+A('npc_hiker')+'" alt="">';
-  h+='<div class="dock"><div class="paper">';
-  if (st.again){
-    h+='<div class="card-t">'+esc(L.NODE[st.type]?L.NODE[st.type].n:'')+'</div><div class="txt">There might be more in here. Each search takes time (eats supplies) and gets riskier.</div><div class="choices"><button class="btn" data-a="again">Search another room<small>eats supplies · risky</small></button><button class="btn teal" data-a="leavestop">Back to the road</button></div>';
-  } else if (!st.result){
-    h+='<div class="card-t">'+esc((st.type==='event'||st.type==='mystery')?'Something on the road':(L.NODE[st.type]?L.NODE[st.type].n:''))+'</div><div class="txt">'+esc(st.text)+'</div><div class="choices">';
-    ev.choices(s).forEach(function(c,i){ var ok=!c.req||c.req(s); h+='<button class="btn'+(i%2?' teal':'')+(ok?'':' off')+'" data-a="choose" data-i="'+i+'" '+(ok?'':'disabled')+'><span class="col" style="align-items:flex-start">'+esc(c.t)+(ok?'':'<span class="why">Can\'t right now</span>')+'</span></button>'; });
-    h+='</div>';
-  } else {
-    var nx=st.next; h+='<div class="txt">'+esc(st.result)+'</div><div class="choices"><button class="btn" data-a="proceed">'+(nx&&nx.fight?'Fight!':nx&&nx.loot?'Open it up':nx&&nx.trader?'Let\'s trade':'Continue')+'</button></div>';
-  }
-  return h+'</div></div></div>'+foot()+'</div>';
-}
-function lootScreen(){
-  var lt=s.loot, c=L.loot.cur(s); var R=L.REGIONS[s.region];
-  var bg = (s.stop && s.stop.bg) || R.fight;
-  var CTN = L.CT[c.type].n;
-  var h='<div class="scr">'+hud()+'<div class="stage dim"><img class="bg" src="'+A(bg)+'" alt="" style="filter:brightness(.6) blur(2px)"><div class="loot"><div class="hd">'+esc(CTN)+(lt.cs.length>1?' · '+(lt.cur+1)+' of '+lt.cs.length:'')+'</div>';
-  var maxR = Math.max.apply(null, c.items.map(function(it){ var b=L.ITEMS[it.k]; return L.SLOTS.indexOf(b.slot)>=0?it.r:0; }).concat([0]));
-  h+='<div class="lcol" style="align-items:center;display:flex;flex-direction:column;'+(land()?'flex:0 0 auto;width:min(30vw,230px)':'width:100%')+'"><div class="ctwrap">'+(c.open?'<img class="burst r'+maxR+'" src="'+A('fx_burst')+'" alt="">':'')+'<img class="ct" src="'+A('ct_'+c.type+(c.open?'_open':''))+'" alt=""></div>';
-  h+='<div class="hint">'+esc(ui.hint|| (c.lock&&!c.open ? (c.lock===2?'A heavy safe. Needs a lockpick or a LOT of prying.':'Locked. Pick it or pry it.') : ''))+'</div>';
-  if (!c.open){
-    var canSniff = s.dog.hurt===0 && c.sniff < (s.dog.bond>=3?2:1);
-    h+='<div class="lootbar">'+(canSniff?'<button class="btn teal" data-a="sniff">Biscuit, sniff!<small>'+(s.dog.bond>=3?'2 sniffs':'1 sniff')+'</small></button>':'');
-    if (c.lock){ h+='<button class="btn'+(L.countUse(s,'lockpick')?'':' off')+'" data-a="open" data-how="pick">Lockpick<small>have '+L.countUse(s,'lockpick')+'</small></button><button class="btn red" data-a="open" data-how="force">Pry it open<small>'+(c.lock===2?4:2)+' parts · might break something</small></button>'; }
-    else h+='<button class="btn" data-a="open">Open it!</button>';
-    h+='<button class="btn teal sm" data-a="nextc">Leave it</button></div></div>';
-  } else {
-    h+='</div><div class="lcol" style="width:100%;display:flex;flex-direction:column;min-height:0;flex:1"><div class="items">';
-    var key = s.uid+'_'+lt.cur; var fresh = !ui.revealed[key]; ui.revealed[key]=1;
-    c.items.forEach(function(it,i){ var tk=c.taken[i]; var b=L.ITEMS[it.k]; var acts = tk ? '' : ('<button class="btn xs" data-a="take" data-i="'+i+'">'+(b.slot==='res'?'Grab':'Take')+'</button>'+(b.slot!=='res'?'<button class="btn xs teal" data-a="scrap" data-i="'+i+'">Scrap +'+L.iscrap(it)+'</button>':''));
-      var card = itemCard(it, acts, tk?'taken':''); if (tk) card = card.replace('</div></div>$','')+'';
-      h+= fresh ? card.replace('class="it ', 'style="animation-delay:'+(0.25+i*0.33)+'s" class="it ') : card.replace('class="it ','style="animation:none" class="it '); });
-    if (!c.items.length) h+='<div class="hint">Empty! Just a sad little cobweb.</div>';
-    var left = c.items.some(function(x,i){ return !c.taken[i]; });
-    h+='</div><div class="lootbar">'+(left?'<button class="btn" data-a="takeall">Take all</button><button class="btn teal" data-a="scrapjunk">Scrap junk</button>':'')+'<button class="btn '+(left?'red':'')+'" data-a="nextc">'+(lt.cur<lt.cs.length-1?'Next':'Done')+(left?'<small>leave the rest</small>':'')+'</button></div><div class="muted" style="color:#fff;text-align:center">Pack '+s.pack.length+'/'+L.packCap(s)+'</div></div>';
-  }
-  return h+'</div></div></div>';
-}
-var INT_CLASS = { charge:'bad', roll:'bad', bite:'bad', throw:'bad', steal:'bad', attack:'warn', sting:'warn', paw:'warn', jaws:'warn', rattle:'warn', light:'warn', howl:'warn', distract:'warn', stunned:'ok', dazzled:'ok', shoved:'ok', move:'', submerge:'' };
-function intentText(e){ var I=e.intent||{t:'move'}; var t = I.t==='shoved'?'Knocked back!':L.INTENT[I.t]||I.t; if (I.dmg) t += ' ('+Math.max(1,I.dmg-L.armor(s))+')'; if (I.t==='move') t='Advancing'+(e.dist>1?' · '+e.dist+' away':''); return t; }
-function foePos(e, n){ var x = [22,50,78][e.lane]; var t = (5-e.dist)/4; var y = land()? (40 + t*52) : (36 + t*46); var hgt = (land()?24:15) + t*(land()?24:16); var d=L.ENEMIES[e.k]; hgt *= (0.62 + d.h*0.75); return {x:x,y:y,h:hgt}; }
-function fightScreen(){
-  var f=s.fight, R=L.REGIONS[s.region], w=L.weapon(s);
-  var h='<div class="scr fight">'+hud()+'<div class="main"><div class="arena" id="arena"><img class="bg" src="'+A(R.fight)+'" alt="">';
-  h+='<div class="turn">'+(f.name?esc(f.name)+' · ':'')+'Turn '+f.turn+'</div>';
-  f.foes.forEach(function(e){ if (e.gone && !(ui.fx||[]).some(function(x){return (x.t==='ko'||x.t==='leave')&&x.id===e.id;})) return; var p=foePos(e), d=L.ENEMIES[e.k]; var ko=e.gone; var can=L.canHit(s,e);
-    h+='<button class="foe'+(ui.tgt===e.id&&!ko?' sel':'')+(ko?' ko':'')+(can?'':' cannot')+'" data-a="tgt" data-i="'+e.id+'" data-f="'+e.id+'" style="left:'+p.x+'%;top:'+p.y+'%;height:'+p.h+'%"><span class="ring"></span><img class="sp" src="'+A(d.img)+'" alt="" style="'+(e.intent&&e.intent.t==='submerge'?'opacity:.45;':'')+(e.boss?'transform:scale(1.25);transform-origin:50% 100%;':'')+'"><div class="inf">'+(ko?'':'<span class="intent '+(INT_CLASS[(e.intent||{}).t]||'')+'">'+esc(intentText(e))+'</span>')+'<span class="fn">'+esc((e.boss&&e.k==='gator'?'Big Al':e.boss&&e.k==='raider'?'Toll King':d.n))+(e.alpha?' (alpha)':'')+' '+Math.max(0,e.hp)+'/'+e.max+'</span><span class="hpb"><i style="width:'+Math.max(0,100*e.hp/e.max)+'%"></i></span></div></button>'; });
-  h+='<div class="party" id="party"><img class="hero" src="'+A('hero_side')+'" alt=""><img class="dg'+(s.dog.hurt>0?' hurt':'')+'" src="'+A('dog_stand')+'" alt=""></div>';
-  if (f.over==='won'){ h+='<div class="banner"><div class="paper"><div class="card-t">'+(f.paid?'Toll paid!':'You won!')+'</div><div class="txt">'+esc(f.result||'')+'</div><div class="choices"><button class="btn" data-a="loot">'+(f.lootList&&f.lootList.length?'Check the loot':'Back to the road')+'</button></div></div></div>'; }
-  else if (f.turn===1 && f.intro && !ui.introSeen){ h+='<div class="banner" style="pointer-events:none"><div class="paper" style="padding:10px 12px"><div class="txt" style="font-size:14px">'+esc(f.intro)+'</div></div></div>'; }
-  h+='</div><div class="acts">';
-  if (!f.over){
-    var t = ui.tgt!==null ? f.foes[ui.tgt] : null; var ht = t&&!t.gone? Math.round(L.hitChance(s,t,false)*100) : null, hp2 = t&&!t.gone? Math.round(L.hitChance(s,t,true)*100):null;
-    var inR = t && !t.gone && L.canHit(s,t);
-    var uses = {}; s.pack.forEach(function(it){ var b=L.ITEMS[it.k]; if (b.slot==='use' && (b.heal||b.fire||b.stunall||b.bug||b.scare||b.repair)) uses[it.k]=(uses[it.k]||0)+1; });
-    var hum = L.alive(f).some(function(e){ return L.ENEMIES[e.k].kind==='human'; });
-    if (ui.items){ h+='<div class="ilist">'+(Object.keys(uses).length? Object.keys(uses).map(function(k){ return '<button class="btn sm teal" data-a="fa" data-a2="item" data-k="'+k+'"><img src="'+A(L.ITEMS[k].img)+'" alt="">'+esc(L.ITEMS[k].n)+' ×'+uses[k]+'</button>'; }).join('') : '<div class="paper txt" style="font-size:13px;padding:8px">No usable items. Find First Aid Kits, Molotovs and Flashbangs in loot or at traders.</div>')+'</div>'; }
-    h+='<div class="fbar">'+
-      '<button class="btn'+(inR?'':' off')+'" data-a="fa" data-a2="attack"><span class="col">Attack<small>'+(inR? ht+'% · '+L.heroDmgBase(s,t,false)+' dmg' : (w.range>1?'out of range':'too far - melee'))+'</small></span></button>'+
-      '<button class="btn red'+(inR?'':' off')+'" data-a="fa" data-a2="power"><span class="col">Power<small>'+(inR? hp2+'% · '+L.heroDmgBase(s,t,true)+' dmg':'-')+'</small></span></button>'+
-      '<button class="btn teal'+(t&&!t.gone&&t.dist<=1?'':' off')+'" data-a="fa" data-a2="shove"><span class="col">Shove<small>push back, cancel</small></span></button>'+
-      '<button class="btn teal" data-a="fa" data-a2="brace"><span class="col">Brace<small>+3 armor, counter</small></span></button>'+
-      '<button class="btn teal" data-a="items"><span class="col">Items<small>'+Object.keys(uses).reduce(function(a,k){return a+uses[k];},0)+' usable</small></span></button>'+
-      (f.toll? '<button class="btn'+(s.res.batteries>=f.toll?'':' off')+'" data-a="fa" data-a2="toll"><span class="col">Pay toll<small>'+f.toll+' batteries</small></span></button>' : '<button class="btn teal'+(hum&&!f.talkTried?'':' off')+'" data-a="fa" data-a2="talk"><span class="col">Talk<small>'+(hum?(f.talkTried?'tried':'humans only'):'animals don\'t listen')+'</small></span></button>')+
-      (f.boss? '<button class="btn teal off" disabled><span class="col">Flee<small>no way out</small></span></button>' : '<button class="btn red" data-a="fa" data-a2="flee"><span class="col">Flee<small>-1 fuel, dents van</small></span></button>')+
-      '<button class="btn teal" data-a="ov" data-v="help"><span class="col">Tells<small>what does it mean?</small></span></button>'+
-    '</div>';
-    var dogOk = s.dog.hurt===0 && s.dog.hp>0 && !f.dogUsed;
-    var cd=function(k){ return f.dogCd[k]>0 && f.dogCd[k]<99 ? ' · wait '+f.dogCd[k] : f.dogCd[k]>=99?' · used':''; };
-    h+='<div class="dbar"><img class="dimg" src="'+A(s.dog.hurt>0?'dog_bow':'dog_sit')+'" alt="" style="'+(s.dog.hurt>0?'filter:grayscale(1)':'')+'"><div class="note">'+(s.dog.hurt>0?'Biscuit is resting in the van':dogOk?'Biscuit: free action!':'Biscuit acted')+'<br>HP '+Math.max(0,s.dog.hp)+'/'+L.dogMax(s)+'</div>'+
-      '<button class="btn sm'+(dogOk&&!f.dogCd.bark?'':' off')+'" data-a="fd" data-a2="bark"><span class="col">Bark<small>scare animals back'+cd('bark')+'</small></span></button>'+
-      '<button class="btn sm'+(dogOk&&!f.dogCd.bite&&t&&!t.gone&&t.dist<=1?'':' off')+'" data-a="fd" data-a2="bite"><span class="col">Bite<small>'+(2+Math.floor(s.dog.bond/3))+' dmg, adjacent'+cd('bite')+'</small></span></button>'+
-      '<button class="btn sm'+(dogOk&&!f.dogCd.fetch&&hum?'':' off')+'" data-a="fd" data-a2="fetch"><span class="col">Fetch<small>steal from humans'+cd('fetch')+'</small></span></button></div>';
-  }
-  h+='</div></div></div>';
-  return h;
-}
-function playFx(){
-  var fx = ui.fx; ui.fx=null; if (!fx || !fx.length) return; var ar=document.getElementById('arena'); if(!ar) return; ui.introSeen=true;
-  var delay=0;
-  fx.forEach(function(x){
-    var el = x.id!==undefined ? ar.querySelector('[data-f="'+x.id+'"]') : null;
-    var pos = function(target){ var r=ar.getBoundingClientRect(); if (target){ var b=target.getBoundingClientRect(); return {x:b.left+b.width/2-r.left, y:b.top+b.height*0.3-r.top}; } var p=document.getElementById('party').getBoundingClientRect(); return {x:p.left+p.width*0.3-r.left, y:p.top+p.height*0.2-r.top}; };
-    var fl=function(txt,cls,target,dl){ setTimeout(function(){ var p=pos(target); var d=document.createElement('div'); d.className='float '+cls; d.textContent=txt; d.style.left=p.x+'px'; d.style.top=p.y+'px'; ar.appendChild(d); setTimeout(function(){ d.remove(); },1200); }, dl); };
-    if (x.t==='hit'){ if (el){ el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit'); } fl((x.src==='crit'?'CRIT! ':'')+'-'+x.n, x.src==='crit'?'crit':x.src==='dog'?'dog':'', el, delay); }
-    else if (x.t==='miss') fl('miss','miss',el,delay);
-    else if (x.t==='ram') fl('RAM! -'+x.n,'crit',el,delay);
-    else if (x.t==='stun') fl('stunned!','miss',el,delay+150);
-    else if (x.t==='shove') fl('shoved!','miss',el,delay+100);
-    else if (x.t==='dmghero'){ delay+=260; fl('-'+x.n,'me',null,delay); setTimeout(function(){ var p=document.getElementById('party'); if(p){ p.classList.remove('hit'); void p.offsetWidth; p.classList.add('hit'); } }, delay); }
-    else if (x.t==='dmgdog'){ delay+=260; fl('Biscuit -'+x.n,'dog',null,delay); }
-    else if (x.t==='heal') fl('+'+x.n,'heal',null,delay);
-    else if (x.t==='bark') fl('WOOF!','dog',null,delay);
-    else if (x.t==='goodboy'){ delay+=260; fl('GOOD BOY!','crit',null,delay); }
-    else if (x.t==='poison'){ delay+=200; fl('-1 venom','me',null,delay); }
-    else if (x.t==='fetch') fl('+'+x.n+' batteries','dog',el,delay);
-    else if (x.t==='howl') fl('AWOOO','miss',el,delay);
-    else if (x.t==='leave') fl('left!','miss',el,delay);
+// ---------- HUD ----------
+const chip = (k, v, mx) => h('button', { class:'chip', 'data-k':k, onclick:() => U.tip(k) }, ico(k), h('b', null, v, mx ? h('i', null, '/' + mx) : null), h('small', null, RES[k].n));
+U.tip = k => { if (RES[k]) U.sheet(RES[k].n, h('p', null, RES[k].d)); else if (k === 'spirit') U.sheet('Spirit', h('p', null, 'Your morale. At 7 or more animals settle faster and traders like you. At 2 or less everything is harder. Wonders, views, music and good company bring it back. If it hits 0 you rest for a day.')); else if (k === 'wear') U.sheet('Van Wear', h('p', null, 'How tired Marigold is. Past 4 she pulls left; past 7 she runs rough. At 10 she stops and you need a tow. Spend parts to fix it.')); else if (k === 'time') U.sheet('Daylight', h('p', null, 'Eight hours of daylight a day. Driving takes 2 or 3 hours. Out of daylight, you camp. A Lantern buys you two more hours.')); };
+U.hud = () => {
+  const G = S.G; if (!G) return null; const wx = L.WEATHER_BY_ID[G.wx], left = C.hoursLeft(G), tot = C.dayLen(G);
+  const pips = []; for (let i = 0; i < tot; i++) pips.push(h('span', { class:'pip' + (i < tot - left ? ' used' : '') }));
+  const fc = G.fc.slice(0, C.forecastDays(G)).map(w => sp('weather', L.WEATHER_BY_ID[w].idx, 'wx-s', L.WEATHER_BY_ID[w].n));
+  return h('div', { class:'hud' },
+    h('div', { class:'hud-r1' }, chip('fuel', G.fuel, C.fuelCap(G)), chip('food', G.food), chip('batt', G.batt), chip('parts', G.parts), chip('treats', G.treats)),
+    h('div', { class:'hud-r2' },
+      h('button', { class:'cell time', onclick:() => U.tip('time') }, h('div', { class:'cl' }, 'Day ' + G.day, h('small', null, left + 'h of daylight')), h('div', { class:'pips' }, pips)),
+      h('button', { class:'cell wx', onclick:() => U.sheet(wx.n + ' today', h('p', null, wx.d), fc.length ? h('p', { class:'fc' }, 'Forecast: ', fc) : null) }, sp('weather', wx.idx, 'wx', wx.n), h('div', { class:'cl' }, wx.n, h('small', null, fc.length ? 'next:' : 'today'), h('span', { class:'fcs' }, fc))),
+      h('button', { class:'cell bar', onclick:() => U.tip('spirit') }, ico('spirit'), h('div', { class:'bw' }, h('div', { class:'bt' }, h('i', { class:'bf sp', style:'width:' + G.spirit * 10 + '%' })), h('small', null, 'Spirit ' + G.spirit))),
+      h('button', { class:'cell bar', onclick:() => U.tip('wear') }, ico('wear'), h('div', { class:'bw' }, h('div', { class:'bt' }, h('i', { class:'bf wr' + (G.wear >= 7 ? ' hot' : ''), style:'width:' + G.wear * 10 + '%' })), h('small', null, 'Van wear ' + G.wear)))));
+};
+U.nav = cur => h('div', { class:'nav' },
+  [['atlas', 'Atlas', 'map'], ['scene', 'Here', 'paw'], ['van', 'Van', 'wear'], ['pack', 'Pack', 'weight'], ['book', 'Scrapbook', 'film']].map(a => h('button', { class:'nv' + (cur === a[0] ? ' on' : ''), 'data-a':'nav-' + a[0], onclick:() => { sfx('soft'); U.go(a[0]); } }, ico(a[2]), h('span', null, a[1]))),
+  h('button', { class:'nv', 'data-a':'nav-menu', onclick:() => U.go('menu') }, sp('uiicons', 9, 'ico', ''), h('span', null, 'Menu')));
+
+// ---------- router ----------
+const screens = U.screens = {};
+const META = ['van', 'pack', 'book', 'menu', 'sunspire', 'howto'];
+U.go = (name, arg) => { if (META.indexOf(name) >= 0 && META.indexOf(S.screen) < 0) S.prev = [S.screen, S.arg]; S.screen = name; S.arg = arg; U.render(); };
+U.back = () => { const p = S.prev || [S.G ? 'scene' : 'title']; U.go(p[0], p[1]); };
+U.render = () => {
+  const app = $('#app'); app.innerHTML = ''; U.closeSheet(); if (U.stopLoops) U.stopLoops();
+  const fn = screens[S.screen]; if (!fn) return; if (U.setMusic) U.setMusic(); const el = fn(S.arg); app.append(el); U.layout(); if (el.__after) el.__after(); save();
+};
+U.refresh = () => { const sc = S.screen; U.render(); };
+// gains: chips describing what changed
+U.gains = list => {
+  const out = []; (list || []).forEach(o => {
+    if (RES[o.k] && o.n) out.push(h('span', { class:'gain ' + (o.n > 0 ? 'up' : 'dn') }, ico(o.k), (o.n > 0 ? '+' : '') + o.n + ' ' + RES[o.k].n));
+    else if (o.k === 'spirit') out.push(h('span', { class:'gain ' + (o.n > 0 ? 'up' : 'dn') }, ico('spirit'), (o.n > 0 ? '+' : '') + o.n + ' Spirit'));
+    else if (o.k === 'wear') out.push(h('span', { class:'gain ' + (o.n > 0 ? 'dn' : 'up') }, ico('wear'), (o.n > 0 ? '+' : '') + o.n + ' Wear'));
+    else if (o.k === 'hours') out.push(h('span', { class:'gain dn' }, ico('clock'), o.n + ' hour' + (o.n > 1 ? 's' : '')));
+    else if (['gift', 'gadget', 'souv', 'tape', 'pass', 'bp'].indexOf(o.k) >= 0) { const it = U.itemInfo(o.k, o.id); out.push(h('span', { class:'gain item' }, im(it.src, 'gi'), (o.k === 'bp' ? '' : o.k === 'pass' ? 'Joined: ' : '') + it.n)); }
+    else if (o.k === 'scrap') out.push(h('span', { class:'gain item' }, sp('uiicons', 4, 'gi'), 'Scrapbook page'));
+    else if (o.k === 'note') out.push(h('span', { class:'gain note' }, o.t));
   });
-}
-function traderScreen(){
-  var t=s.trader; var who = t.who==='velvet'?'npc_velvet':t.who==='club'?'npc_mailman':'npc_dot'; var nm = {dot:'Dot & Ziggy\'s Rolling Shop', velvet:'Chez Velvet\'s Merch Table', club:'The Shuffleboard Club Swap Meet'}[t.who]||'Trader';
-  var greet = {dot:'"Hey hon! Ziggy, get the good stuff out. Batteries only, we don\'t take checks."', velvet:'"Limited drop! Everything is, like, super exclusive."', club:'"We\'ve got everything. Except patience."'}[t.who];
-  var bg = s.region===0?'stop_gas':'stop_town';
-  var h='<div class="scr trade">'+hud()+'<div class="stage"><img class="bg" src="'+A(bg)+'" alt=""><img class="who l" src="'+A(who)+'" alt=""><div class="dock"><div class="paper"><div class="card-t">'+esc(nm)+'</div><div class="txt" style="font-size:14px">'+esc(greet)+'</div>';
-  h+='<div class="sec">For sale</div><div class="stock">'+t.stock.map(function(o,i){ return t.sold[i]? '' : itemCard(o.it, '<button class="btn xs'+(s.res.batteries>=o.price?'':' off')+'" data-a="buy" data-i="'+i+'">Buy · '+o.price+' batteries</button>'); }).join('')+'</div>';
-  if (t.sv && !t.svSold){ var S=L.SOUVENIRS[t.sv]; h+='<div class="sec">Souvenir</div><div class="sv"><img src="'+A('sv_'+t.sv)+'" alt=""><div style="flex:1"><div class="nm">'+esc(S.n)+'</div><div class="muted">'+esc(S.d)+'</div></div><button class="btn sm'+(s.res.batteries>=t.svPrice?'':' off')+'" data-a="buysv">'+t.svPrice+' bat.</button></div>'; }
-  h+='<div class="sec">Supplies</div><div class="svc">'+t.svc.map(function(o,i){ return '<button class="btn sm teal'+(s.res.batteries>=o.cost?'':' off')+'" data-a="svc" data-i="'+i+'"><span class="col">'+esc(o.n)+'<small>'+o.cost+' batteries</small></span></button>'; }).join('')+'</div>';
-  h+='<div class="sec">Sell from your pack</div>'+(s.pack.length? '<div class="stock">'+s.pack.map(function(it,i){ return itemCard(it,'<button class="btn xs teal" data-a="sell" data-i="'+i+'">Sell +'+L.ival(it)+'</button>'); }).join('')+'</div><div class="choices"><button class="btn teal sm" data-a="selljunk">Sell all junk</button></div>' : '<div class="muted">Your pack is empty.</div>');
-  h+='</div><div class="pinleave"><button class="btn" data-a="leavetrade">Back on the road</button></div></div></div>'+foot()+'</div>';
-  return h;
-}
-function regionScreen(){
-  var R0=L.REGIONS[s.regionCard.from], R1=L.REGIONS[s.regionCard.to];
-  return '<div class="scr"><img class="bg" src="'+A(R1.map)+'" alt="" style="filter:brightness(.75)"><div class="center"><div class="big">'+esc(R0.short)+': done!</div><div class="paper" style="max-width:480px;width:100%"><div class="card-t">Next: '+esc(R1.n)+'</div><div class="txt">'+esc(R1.blurb)+'</div><div class="statrow" style="margin-top:8px"><span>Day '+s.day+'</span><span>'+s.stats.kills+' bested</span><span>Bond '+s.dog.bond+'/10</span><span>'+s.dash.length+' souvenirs</span></div><div class="muted">Your dashboard gets one more slot. You patch yourself up a little (+4 HP).</div><div class="choices"><button class="btn teal" data-a="ov" data-v="garage">Visit the garage first</button><button class="btn" data-a="region">Drive on!</button></div></div></div></div>';
-}
-function finaleScreen(){
-  var mins = Math.round((Date.now()-s.stats.t0)/60000), st=ui.fin||0, F=s.flags;
-  var friends=[{k:'npc_dot',n:'Dot & Ziggy',m:F.metDot,l:'"Told you the lights were real, hon!"'},{k:'npc_hiker',n:'Juniper',m:F.ev_juniper,l:'Plays the song about Biscuit. The whole crowd knows the words.'},{k:'npc_velvet',n:'Chez Velvet',m:F.ev_velvet,l:F.velvet==='rival'?'"You took my limo parts. ...Okay, you can be in my vlog."':'"BESTIE! We made it! Say hi to the fans!"'},{k:'npc_rosa',n:'Grandma Rosa',m:F.ev_rosa,l:'Lassos you into a hug from twenty feet away.'},{k:'npc_trucker',n:'Big Wendell',m:F.ev_trucker,l:'"Breaker breaker, welcome home, little green van."'},{k:'npc_mailman',n:'The Mailman',m:true,l:'"Special delivery." It\'s a churro.'}].filter(function(f){return f.m;});
-  var h='<div class="scr fin st'+st+'"><div class="finwrap"><img class="bg" src="'+A(st===2?'postcard':'finale_palace')+'" alt=""></div><div class="center"><div class="paper">';
-  if (st===0){
-    h+='<div class="card-t">Sunspire Park</div><div class="txt">You roll up to the gates at sunset. Everything is dark. Then - <b class="pu p1">click.</b> <span class="pu p2">The carousel lights up.</span> <span class="pu p3">The Ferris wheel spins awake, bulb by bulb.</span> <span class="pu p4">The Seashell Palace glows like a birthday cake.</span> <span class="pu p5">Fireworks. Music. Someone is cheering. A lot of someones.</span></div><div class="choices"><button class="btn" data-a="finnext">Walk up to the palace</button></div>';
-  } else if (st===1){
-    h+='<div class="card-t">Friends waiting at the palace</div><div class="txt" style="font-size:14px">Sunny the Pelican (a very sweaty person in a costume) opens the gates. Biscuit runs straight for the churros.</div><div class="friends">'+friends.map(function(f){ return '<div class="fr"><img src="'+A(f.k)+'" alt=""><div><b>'+esc(f.n)+'</b><div class="muted">'+esc(f.l)+'</div></div></div>'; }).join('')+'</div><div class="choices"><button class="btn" data-a="finnext">Write a postcard home</button></div>';
-  } else {
-    h+='<div class="pc"><div class="pcmsg">Made it to Sunspire! Day '+s.day+'. Marigold is fine (mostly). Biscuit has eaten '+(3+s.dog.bond)+' churros. Wish you were here - actually, come here. The lights are on. Love, me &amp; B.</div></div><div class="statrow" style="margin-top:8px"><span>Day '+s.day+'</span><span>'+mins+' min</span><span>'+s.stats.kills+' bested</span><span>'+s.stats.talks+' talked down</span><span>Bond '+s.dog.bond+'/10</span></div><div style="display:flex;gap:4px;margin:6px 0">'+s.dash.map(function(k){ return '<img src="'+A('sv_'+k)+'" style="height:34px">'; }).join('')+'</div><div class="choices"><button class="btn" data-a="home">Back to the title</button></div>';
+  return h('div', { class:'gains' }, out);
+};
+// pack full / dash full
+U.handleFull = (list, then) => {
+  const fulls = (list || []).filter(o => o.k === 'full'); const next = () => { const f = fulls.shift(); if (!f) { then && then(); return; } U.fullSheet(f, next); };
+  next();
+};
+U.fullSheet = (f, then) => {
+  const G = S.G, it = U.itemInfo(f.kind, f.id);
+  const items = f.kind === 'souv' ? G.souvs.map(id => ({ kind:'souv', id })) : G.gadgets.map(id => ({ kind:'gadget', id })).concat(G.gifts.map(id => ({ kind:'gift', id })));
+  U.sheet(f.kind === 'souv' ? 'The dashboard is full' : 'Your pack is full', h('div', null, h('div', { class:'itemrow big' }, im(it.src, 'iti'), h('div', null, h('b', null, it.n), h('p', null, it.d))), h('p', null, f.kind === 'souv' ? 'Swap one out to keep it, or leave it behind.' : 'Drop something to make room, or leave it behind.'),
+    h('div', { class:'grid' }, items.map(x => { const ii = U.itemInfo(x.kind, x.id); return h('button', { class:'cellitem', onclick:() => { if (x.kind === 'souv') G.souvs.splice(G.souvs.indexOf(x.id), 1); else if (x.kind === 'gadget') G.gadgets.splice(G.gadgets.indexOf(x.id), 1); else G.gifts.splice(G.gifts.indexOf(x.id), 1); C.giveItem(G, f.kind, f.id); U.closeSheet(); sfx('open'); U.toast('Dropped ' + ii.n + '. Took the ' + it.n + '.'); then && then(); } }, im(ii.src, 'sp48'), h('small', null, ii.n)); }))),
+    { sticky:true, actions:[U.btn('Leave it', () => { U.closeSheet(); then && then(); })] });
+};
+
+// ---------- the atlas ----------
+const paper = new Image(); paper.src = 'assets/big/paper.webp'; paper.onload = () => { if (S.screen === 'atlas') U.drawFog(); };
+U.drawFog = () => {
+  const cv = $('canvas.fog'); if (!cv || !S.G) return; const G = S.G, W = cv.clientWidth, Hh = cv.clientHeight; if (!W) return;
+  const d = Math.min(2, devicePixelRatio || 1); cv.width = W * d; cv.height = Hh * d; const x = cv.getContext('2d'); x.scale(d, d);
+  if (paper.complete && paper.naturalWidth) x.drawImage(paper, 0, 0, W, Hh); else { x.fillStyle = '#e4d3b2'; x.fillRect(0, 0, W, Hh); }
+  x.fillStyle = 'rgba(110,80,50,.14)'; x.fillRect(0, 0, W, Hh);
+  x.globalCompositeOperation = 'destination-out'; x.fillStyle = 'rgba(0,0,0,.42)'; x.fillRect(0, 0, W, Hh);
+  x.globalCompositeOperation = 'destination-out';
+  const clear = (px, py, r, a) => { const g = x.createRadialGradient(px, py, r * .45, px, py, r); g.addColorStop(0, 'rgba(0,0,0,' + a + ')'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.beginPath(); x.arc(px, py, r, 0, 7); x.fill(); };
+  G.nodes.forEach((n, i) => { if (n.seen < 1) return; if (L.NODE_T[i].hidden && !G.hid[G.reg]) return; const p = C.pos(G, i); if (n.seen >= 2) clear(p[0] * W, p[1] * Hh, W * .42, 1); else clear(p[0] * W, p[1] * Hh, W * .17, .85); });
+  if (G.mapSeen[G.reg]) { x.globalCompositeOperation = 'destination-out'; x.fillStyle = 'rgba(0,0,0,.35)'; x.fillRect(0, 0, W, Hh); }
+};
+const wob = (a, b, k) => { const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = b[0] - a[0], dy = b[1] - a[1], s = ((k * 37) % 7 - 3) * .012; return [mx - dy * s * 3, my + dx * s * 3]; };
+U.driveTo = b => {
+  const G = S.G; const c = C.canGo(G, b); const issues = [];
+  if (c.fuelShort > 0) issues.push('You need ' + c.cost.fuel + ' fuel and have ' + G.fuel + '. You would push the van the last stretch: +' + c.fuelShort * 2 + ' hours, +' + c.fuelShort + ' wear, Spirit −1.');
+  if (c.dusk) issues.push('It will be dark before you get there. Driving on at night: Wear +1, Spirit −1. Or make camp here first.');
+  if (G.wear >= 9) issues.push('Marigold is nearly done (wear ' + G.wear + '). One more bump and she stops.');
+  const go = () => { U.closeSheet(); U.doDrive(b); };
+  if (!issues.length) return go();
+  U.sheet('Before you go', h('div', null, issues.map(t => h('p', { class:'warn' }, t))), { actions:[U.btn(c.fuelShort > 0 ? 'Push on anyway' : 'Drive on', go, { cls:'btn-r', a:'drive-anyway' }), c.dusk ? U.btn('Make camp here', () => { U.closeSheet(); U.doCamp(); }, { a:'camp-first' }) : null, U.btn('Stay', U.closeSheet, { a:'stay' })]});
+};
+U.doDrive = b => {
+  const G = S.G; if (S.busy) return; S.busy = true; const from = G.node; sfx('drive');
+  const van = $('.van'); const p = C.pos(G, b); const q = C.pos(G, from);
+  if (van) { van.style.transform = 'translate(-50%,-72%) scaleX(' + (p[0] < q[0] ? -1 : 1) + ')'; van.classList.add('moving'); van.style.left = p[0] * 100 + '%'; van.style.top = p[1] * 100 + '%'; }
+  const res = C.go(G, b); S.driveRes = res;
+  setTimeout(() => { S.busy = false; U.afterDrive(res); }, van ? 950 : 50);
+};
+U.afterDrive = res => {
+  const G = S.G; S.sel = null; U.clearToast();
+  if (G.wear >= 10 && !res.enc) return U.breakdown(() => U.arrive(res));
+  if (res.enc) return U.startEnc(res.enc, () => U.arrive(res));
+  U.arrive(res);
+};
+U.arrive = res => {
+  const G = S.G; if (G.ended) return U.tripOver();
+  if (G.wear >= 10) return U.breakdown(() => U.arrive(res));
+  S.ev = null; S.notes = (res && res.lines) || [];
+  if (G.spirit <= 0) { return U.restDay(); }
+  U.go('scene');
+};
+U.breakdown = then => {
+  const G = S.G; const b = C.breakdown(G);
+  if (b.saved) { sfx('wrench'); U.sheet('The spare wheel earns its place', h('p', null, 'Something gives with a bang. You are rolling on the spare before the dust settles. Marigold is shaky, but she goes. (Wear drops to 5. The spare is used up.)'), { sticky:true, actions:[U.btn('Keep going', () => { U.closeSheet(); then(); }, { cls:'btn-r' })] }); }
+  else U.tow('breakdown', then);
+};
+U.tow = (why, then) => {
+  const G = S.G; const r = C.tow(G, why); sfx('tow'); save();
+  const msg = { breakdown:'Marigold stops with a long, tired sound. You sit on the bumper until the lights of a flatbed come over the rise.', 'enc-standoff':'The animal is not going anywhere, and neither is the van. You call it a day and wait for a tow.', 'enc-closecall':'The road wins this one.', 'cross-closecall':'The crossing wins this round. A tow truck finds you at the edge of the road.', 'cross-standoff':'The herd holds the road. You are towed back to try again in the morning.', 'cross-roadblock':'You are towed back to try again.' }[why] || 'A tow truck finds you before dark.';
+  const over = r.over;
+  U.go('tow', { r, msg, then, over });
+};
+screens.tow = a => {
+  const G = S.G; const r = a.r;
+  return h('div', { class:'scr full tow' }, h('div', { class:'fullart' }, sp('van', 2, 'towvan', ''), h('div', { class:'towbg' })),
+    h('div', { class:'fullcard' }, h('h1', null, 'A Tow'), h('p', null, a.msg), h('p', null, 'You wake at ' + C.nodeName(G, r.to) + '. ' + (r.free ? 'The blank plate on your dash does the talking: the tow is free this once.' : r.paid ? 'The fee: ' + r.paid + ' batteries.' : 'The driver does not charge you, since you have nothing to give.')), h('p', { class:'sm' }, 'Tows this trip: ' + G.tows + (G.gentle ? '' : ' of ' + L.MAXTOW + ' you can afford')),
+      U.btn(a.over ? 'Continue' : 'Back on the road', () => { if (a.over) U.tripOver(); else if (a.then) { /* after tow the node changed; arrive */ S.ev = null; S.notes = []; U.go('scene'); } }, { cls:'btn-r', a:'tow-ok' })));
+};
+U.tripOver = () => { const G = S.G, m = S.meta; m.trips++; const keep = Object.keys(m.bp).length; G.ended = G.ended || 'tows'; save(); localStorage.removeItem('lrt2_run'); U.go('over'); };
+screens.over = () => { const G = S.G; return h('div', { class:'scr full' }, h('div', { class:'fullart' }, im('assets/big/title.webp', 'bgimg'), h('div', { class:'shade' })), h('div', { class:'fullcard' }, h('h1', null, 'The Trip Ends Here'), h('p', null, 'The van has been towed one time too many. Walt\'s flatbed takes you the rest of the way home, and nobody says very much.'), h('p', null, 'It is not wasted. Every blueprint, every lamp you lit at Sunspire, every Scrapbook page and every Mixtape stays with you. Next time you start with more.'), h('p', { class:'sm' }, 'You reached ' + C.R(G).n + ' on day ' + G.day + '.'), U.btn('Back to the title', () => { S.G = null; U.go('title'); }, { cls:'btn-r', a:'over-ok' }))); };
+U.restDay = () => {
+  const G = S.G; C.newDay(G); G.food = Math.max(0, G.food - 1); G.spirit = 3; save();
+  U.sheet('A day of rest', h('p', null, 'You are too tired to drive safely. You park, put the dog in the shade and sleep through most of a day. It helps. (Spirit back to 3. A day and a meal gone.)'), { sticky:true, actions:[U.btn('Carry on', () => { U.closeSheet(); U.go('scene'); }, { cls:'btn-r' })] });
+};
+U.doCamp = () => {
+  const G = S.G; const t = C.nodeT(G).t; const r = C.camp(G); sfx('soft'); S.ev = null;
+  const wx = L.WEATHER_BY_ID[G.wx];
+  const text = t === 'camp' ? 'A fire, a pot, the dog asleep against your leg. The day ends well.' : (t === 'stop' || t === 'town') ? 'You find a quiet corner behind the building and sleep in the van.' : C.has2(G, 'bag') ? 'You sleep rough, but the sleeping bag makes it fine.' : 'You sleep in the van on the shoulder of the road. Nobody sleeps well.';
+  U.sheet('Day ' + (G.day) + ' begins', h('div', null, h('p', null, text), r.lines.map(t => h('p', { class:'warn' }, t)), U.gains([{ k:'spirit', n:r.spirit }].concat(r.solar ? [{ k:'batt', n:1 }] : [])), h('p', null, sp('weather', wx.idx, 'wx-s', ''), ' Today: ' + wx.n + '. ' + wx.d)), { sticky:true, actions:[U.btn('Get going', () => { U.closeSheet(); if (G.spirit <= 0) U.restDay(); else U.go(S.screen === 'scene' ? 'scene' : 'atlas'); }, { cls:'btn-r', a:'camp-ok' })] });
+};
+
+// atlas screen
+screens.atlas = () => {
+  const G = S.G, r = C.R(G), cur = G.node, sel = S.sel;
+  const pins = [], routes = [];
+  G.nodes.forEach((n, i) => {
+    if (n.seen < 1) return; if (L.NODE_T[i].hidden && !G.hid[G.reg]) return; const p = C.pos(G, i);
+    const known = C.typeKnown(G, i) || n.seen >= 2; const t = L.NODE_T[i];
+    pins.push(h('button', { class:'pin' + (i === cur ? ' cur' : '') + (i === sel ? ' sel' : '') + (n.seen >= 2 ? ' vis' : '') + (n.restored ? ' lit' : '') + (t.hidden ? ' hid' : ''), style:'left:' + p[0] * 100 + '%;top:' + p[1] * 100 + '%', 'data-n':i, 'data-a':'pin-' + i, onclick:() => U.pickNode(i) }, sp('pins', known ? C.pinIdx(G, i) : 8, 'pimg', ''), n.seen >= 2 ? h('span', { class:'plab' }, r.names[i]) : null));
+  });
+  L.EDGES.forEach((e, k) => { const a = G.nodes[e[0]], b = G.nodes[e[1]]; if (a.seen < 1 || b.seen < 1) return; if ((L.NODE_T[e[0]].hidden || L.NODE_T[e[1]].hidden) && !G.hid[G.reg]) return; if (a.seen < 2 && b.seen < 2) return; const p = C.pos(G, e[0]), q = C.pos(G, e[1]), w = wob(p, q, k + 1); const both = a.seen >= 2 && b.seen >= 2; const d = 'M' + p[0] * 300 + ' ' + p[1] * 400 + ' Q' + w[0] * 300 + ' ' + w[1] * 400 + ' ' + q[0] * 300 + ' ' + q[1] * 400; routes.push(h('path', { d, class:'rt' + (both ? ' vis' : '') + (e[0] === cur && e[1] === sel || e[1] === cur && e[0] === sel ? ' sel' : '') })); });
+  const cp = C.pos(G, cur);
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 300 400'); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('class', 'routes'); routes.forEach(p => { const e = document.createElementNS('http://www.w3.org/2000/svg', 'path'); for (const a of p.getAttributeNames()) e.setAttribute(a, p.getAttribute(a)); svg.append(e); });
+  const map = h('div', { class:'map' }, im('assets/atlas/' + (r.id === 'mj' ? 'mojave' : r.id) + '.webp', 'atlas-img', r.n), h('canvas', { class:'fog' }), svg, pins, sp('van', 0, 'van', 'Marigold'));
+  const van = map.querySelector('.van'); van.style.left = cp[0] * 100 + '%'; van.style.top = cp[1] * 100 + '%';
+  const root = h('div', { class:'scr atlas' }, U.hud(), h('div', { class:'artcol' }, map, h('div', { class:'mapcap' }, r.short, h('small', null, ' · ' + C.nodeName(G, cur)))), h('div', { class:'panel' }, U.nodePanel()), U.nav('atlas'));
+  root.__after = () => { U.drawFog(); U.coach('hud'); };
+  return root;
+};
+U.pickNode = i => { sfx('soft'); S.sel = (S.sel === i) ? null : i; if (S.screen === 'atlas') { const keep = $('.panel'); U.render(); } };
+U.nodePanel = () => {
+  const G = S.G, r = C.R(G), cur = G.node, sel = S.sel, wrap = h('div', { class:'np' });
+  if (sel == null) {
+    const t = C.nodeT(G), here = C.nodeName(G, cur);
+    wrap.append(h('div', { class:'np-h' }, h('div', null, h('h3', null, here), h('small', null, 'You are here. ' + r.n)), U.btn('Look around', () => { U.go('scene'); }, { cls:'btn-t', a:'look-here' })),
+      h('p', { class:'hint' }, 'Tap a stop on the atlas to see what the drive will cost. Unknown stops are marked with a question mark; a viewpoint, binoculars or a map reveals them.'));
+    const nb = C.nbrs(G, cur); if (!nb.length) wrap.append(h('p', null, 'No roads from here.'));
+    return wrap;
   }
-  return h+'</div></div></div>';
-}
-H.finnext = function(){ ui.fin=(ui.fin||0)+1; AU.sfx('sv'); render(); };
-function confetti(){ var keys=['sv_sun','sv_pelican','it_treat','sv_flamingo','sv_hula','sv_disco']; var box=app.querySelector('.fin'); if(!box) return; for (var i=0;i<18;i++){ var im=document.createElement('img'); im.src=A(keys[i%keys.length]); im.className='confetti'; im.style.left=(Math.random()*95)+'%'; im.style.width=(28+Math.random()*30)+'px'; im.style.animationDuration=(3+Math.random()*4)+'s'; im.style.animationDelay=(Math.random()*3)+'s'; box.appendChild(im); } }
-function endScreen(){
-  var why = s.ended&&s.ended.why; var R=L.REGIONS[s.region];
-  var title = why==='van' ? 'Marigold gave out.' : 'You need a long nap.';
-  var body = why==='van' ? 'With one last sad honk, Marigold rolls to a stop and won\'t start again. Biscuit licks your hand. You\'ll get back on the road, but not today.' : 'You wake up in the back of the van, Biscuit curled on your chest, keeping watch. The trip is over for now. He\'s fine, by the way. He always is.';
-  var pct = Math.round(L.progress(s)*100);
-  return '<div class="scr"><img class="bg" src="'+A(why==='van'?'breakdown':'stop_camp')+'" alt="" style="filter:brightness(.8)"><div class="center"><div class="big">'+esc(title)+'</div><div class="paper" style="max-width:480px;width:100%"><div class="txt">'+esc(body)+'</div><div class="statrow" style="margin-top:8px"><span>'+pct+'% of the way to Sunspire</span><span>Day '+s.day+'</span><span>'+esc(R.short)+'</span><span>'+s.stats.kills+' bested</span><span>Bond '+s.dog.bond+'/10</span></div>'+(s.mailed?'<div class="muted">The Mailman will deliver your '+esc(L.iname(s.mailed))+' on your next trip.</div>':'<div class="muted">Tip: find the Mailman to send gear to your next trip.</div>')+'<div class="choices"><button class="btn" data-a="newgame2">Try again</button><button class="btn teal" data-a="home">Title screen</button></div></div></div></div>';
-}
-H.newgame2 = function(){ newGame(false); };
-
-// ---------- overlays ----------
-function overlay(){
-  var v=ui.ov, h='<div class="ov"><div class="ovin">', title='', body='';
-  if (v==='pack'){ title='Pack';
-    body+='<div class="slots">'+L.SLOTS.map(function(sl){ var it=s.gear[sl]; return '<div class="slot'+(it?' r'+it.r:'')+'">'+(it?'<img src="'+A(L.ITEMS[it.k].img)+'" alt="">':'')+sl+'</div>'; }).join('')+'</div>';
-    body+='<div class="statrow"><span>HP '+s.hp+'/'+L.hpMax(s)+'</span><span>Armor '+L.armor(s)+'</span><span>Weapon: '+esc(s.gear.weapon?L.iname(s.gear.weapon):'fists')+'</span></div><div class="muted" style="margin-bottom:6px">'+esc(s.gear.weapon?statLine(s.gear.weapon):'')+'</div>';
-    body+='<div class="sec">In your pack ('+s.pack.length+'/'+L.packCap(s)+')</div><div class="grid">'+s.pack.map(function(it,i){ var b=L.ITEMS[it.k]; var a=''; if (L.SLOTS.indexOf(b.slot)>=0) a+='<button class="btn xs" data-a="equip" data-i="'+i+'">Equip</button>'; if (b.slot==='use' && (b.heal||b.repair||b.toy||b.scout)) a+='<button class="btn xs" data-a="use" data-i="'+i+'">Use</button>'; a+='<button class="btn xs teal" data-a="scrapp" data-i="'+i+'">Scrap +'+L.iscrap(it)+'</button>'; return itemCard(it,a); }).join('')+'</div>'+(s.pack.length?'':'<div class="muted">Empty. Go find some stuff!</div>')+
-      '<div class="choices"><button class="btn teal sm" data-a="scrapjunkp">Scrap all junk &amp; worse gear</button></div>';
-  } else if (v==='garage'){ title='Marigold\'s Garage';
-    body+='<div class="banner-img"><img class="bg" src="'+A('garage')+'" alt=""></div><div style="padding-top:8px"><div class="statrow"><span>Marigold '+s.van.hp+'/'+L.vanMax(s)+'</span><span>Parts '+s.res.parts+'</span><span>Batteries '+s.res.batteries+'</span></div>'+
-    '<div class="choices" style="margin:0 0 8px"><button class="btn teal sm'+(s.van.hp<L.vanMax(s)&&s.res.parts?'':' off')+'" data-a="repair">Repair Marigold (1 part = 2 HP)</button></div><div class="mods">';
-    Object.keys(L.MODULES).forEach(function(m){ var M=L.MODULES[m], lv=s.van.mods[m], c=L.garage.cost(s,m); var ok = c && s.res.parts>=c.parts && s.res.batteries>=c.batteries;
-      body+='<div class="mod"><div class="mid"><div class="mn">'+esc(M.n)+'</div><div class="pips">'+[1,2,3].map(function(i){ return '<i class="'+(i<=lv?'on':'')+'"></i>'; }).join('')+'</div><div class="md">'+esc(M.d[lv])+(c?'<br><b>Next:</b> '+esc(M.d[lv+1]):'')+'</div></div>'+(c?'<button class="btn sm'+(ok?'':' off')+'" data-a="upg" data-m="'+m+'"><span class="col">Upgrade<small>'+c.parts+' parts · '+c.batteries+' bat.</small></span></button>':'<b>MAX</b>')+'</div>'; });
-    body+='</div></div>';
-  } else if (v==='dash'){ title='Dashboard';
-    var spots=[[30,44],[48,42],[63,43],[76,46],[86,48],[40,46]];
-    body+='<div class="dashv"><img class="bg" src="'+A('dashboard')+'" alt="">'+s.dash.map(function(k,i){ var p=spots[i%spots.length]; return '<img class="svp" src="'+A('sv_'+k)+'" style="left:'+p[0]+'%;top:'+p[1]+'%;animation-delay:'+(i*0.3)+'s" alt="">'; }).join('')+'</div>';
-    body+='<div class="sec">Souvenirs ('+s.dash.length+'/'+L.dashCap(s)+')</div>'+(s.dash.length? s.dash.map(function(k){ var S=L.SOUVENIRS[k]; return '<div class="sv" style="margin-bottom:6px"><img src="'+A('sv_'+k)+'" alt=""><div style="flex:1"><div class="nm">'+esc(S.n)+'</div><div class="muted">'+esc(S.d)+'</div></div><button class="btn xs red" data-a="drop" data-k="'+k+'">Toss</button></div>'; }).join('') : '<div class="muted">Nothing yet. Bosses, attractions and traders have souvenirs.</div>');
-    body+='<div class="sec">Combos</div>'+L.COMBOS.map(function(c){ var on=c.need.every(function(k){return L.has(s,k);}); return '<div class="combo'+(on?'':' no')+'">'+(on?'ACTIVE: ':'')+esc(c.n)+' <span class="muted">('+c.need.map(function(k){return L.SOUVENIRS[k].n;}).join(' + ')+')</span><br>'+esc(c.d)+'</div>'; }).join('');
-  } else if (v==='dog'){ title='Biscuit';
-    body+='<div style="display:flex;gap:10px;align-items:flex-end"><img src="'+A(s.dog.hurt>0?'dog_bow':'dog_stand')+'" style="height:130px" alt=""><div><div class="card-t">Bond '+s.dog.bond+'/10</div><div class="statrow"><span>HP '+Math.max(0,s.dog.hp)+'/'+L.dogMax(s)+'</span><span>Treats '+s.res.treats+'</span></div>'+(s.dog.hurt>0?'<div class="muted">Resting in the dog bed for '+s.dog.hurt+' more stop(s).</div>':'')+'</div></div>';
-    body+='<div class="choices"><button class="btn'+(s.res.treats?'':' off')+'" data-a="treat">Give a treat<small>+1 bond, heals Biscuit</small></button></div>';
-    body+='<div class="sec">What Biscuit can do</div>'+[[1,'Bark: scares animals back and cancels their big moves.'],[1,'Bite: hits an adjacent enemy. Hits harder as your bond grows.'],[1,'Fetch: snatches batteries off a human, once per fight.'],[1,'Sniff: smells what\'s inside a container before you open it.'],[3,'Bond 3: sniffs twice per container.'],[6,'Bond 6: barks more often.'],[8,'Bond 8: tackles you out of the way of a deadly hit, once per fight.'],[10,'Bond 10: best friends forever.']].map(function(r){ return '<div class="combo'+(s.dog.bond>=r[0]?'':' no')+'">'+esc(r[1])+'</div>'; }).join('');
-  } else if (v==='help'){ title='Reading the tells';
-    body+='<div class="txt" style="font-size:14px">Enemies show what they\'ll do next turn. Plan around it!<br><br>'+
-      '<b>Boar - pawing the dirt:</b> it will CHARGE for double damage. Shove it, bark at it, or brace.<br><b>Rattlesnake - rattling:</b> venom bite next (extra damage + poison). Shove or bark.<br><b>Gator - jaws open:</b> DEATH ROLL next. Shove it away! Submerged gators can\'t be shot from range.<br><b>Wolves:</b> the alpha howls to buff the pack. Take the alpha out first.<br><b>Mosquito swarms:</b> sting from range. Melee is weak against them; bug spray or fire wipes them out.<br><b>Welder Raider - lighting a molotov:</b> big fire throw next. Bark cancels it.<br><b>Slick Rick - "look over there!":</b> he\'ll steal an item next turn. Hit him first.<br><b>Toll Bandits:</b> sometimes you can talk them down. Or just pay.<br><br>Biscuit\'s action is free - use it every turn!</div>';
-  } else if (v==='menu'){ title='Menu';
-    body+='<div class="choices"><button class="btn teal" data-a="mute">'+(AU.muted?'Sound: OFF (tap to turn on)':'Sound: ON (tap to mute)')+'</button><button class="btn teal" data-a="ov" data-v="howin">How to play</button><button class="btn teal" data-a="ov" data-v="help">Reading the tells</button><button class="btn red" data-a="quit">Save &amp; quit to title</button></div><div class="muted" style="margin-top:10px">Your trip saves automatically after every move.'+(s.daily?' This is today\'s Daily Route.':'')+' Seed '+(s.seed>>>0)+'</div>';
-  } else if (v==='howin'){ title='How to play'; body=howTo(); }
-  h+='<div class="ovhd"><div class="h">'+esc(title)+'</div><button class="x" data-a="ov" data-v="">Close</button></div><div class="ovbody">'+body+'</div></div></div>';
-  return h;
-}
-H.quit = function(){ save(); s=null; ui.ov=null; render(); };
-function offerModal(){
-  var o=s.offer, full = s.dash.length>=L.dashCap(s);
-  var h='<div class="offer"><div class="h">'+esc(o.why)+'</div><div class="cards">';
-  o.keys.forEach(function(k,i){ var S=L.SOUVENIRS[k]; var cmb = L.COMBOS.filter(function(c){ return c.need.indexOf(k)>=0 && c.need.every(function(n){ return n===k || L.has(s,n); }); })[0];
-    h+='<div class="oc" style="animation-delay:'+(i*0.15)+'s"><img class="bst" src="'+A('fx_burst')+'" alt=""><img src="'+A('sv_'+k)+'" alt=""><div class="nm">'+esc(S.n)+'</div><div class="d">'+esc(S.d)+'</div>'+(cmb?'<div class="cmb">Completes combo: '+esc(cmb.n)+'!</div>':'')+'<button class="btn sm" data-a="takeoffer" data-k="'+k+'">Take it</button></div>'; });
-  h+='</div>';
-  if (full) h+='<div class="paper" style="max-width:520px;width:100%"><div class="txt" style="font-size:14px">Dashboard is full ('+s.dash.length+'/'+L.dashCap(s)+'). Toss one to make room:</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'+s.dash.map(function(k){ return '<button class="btn xs red" data-a="drop" data-k="'+k+'"><img src="'+A('sv_'+k)+'" style="height:22px" alt="">'+esc(L.SOUVENIRS[k].n)+'</button>'; }).join('')+'</div></div>';
-  h+='<button class="btn teal sm" data-a="takeoffer" data-k="">No thanks</button></div>';
-  return h;
-}
-
-// ---------- input ----------
-app.addEventListener('click', function(ev){
-  AU.init();
-  var el = ev.target.closest('[data-a]'); if (!el || el.disabled) return;
-  var a = el.dataset.a, d = Object.assign({}, el.dataset);
-  if (d.a2) d.a = d.a2;
-  if (a==='fa' || a==='fd'){ H[a](d); return; }
-  if (H[a]) H[a](d);
-});
-var rt=null; addEventListener('resize', function(){ clearTimeout(rt); rt=setTimeout(render,120); });
-document.addEventListener('visibilitychange', function(){ if (document.hidden) save(); });
-render();
-})();
+  const n = G.nodes[sel], known = C.typeKnown(G, sel) || n.seen >= 2, t = L.NODE_T[sel]; const adj = C.nbrs(G, cur).indexOf(sel) >= 0; const c = C.edgeCost(G, cur, sel);
+  const kind = known ? ({ town:'A small town', gas:'Gas station', stop:'Roadside stop', camp:'Campsite', vista:'Viewpoint', wonder:'A Wonder', house:'Abandoned house', trader:'Trading post', cross:'The Crossing' }[t.t]) : 'Unknown stop';
+  wrap.append(h('div', { class:'np-h' }, h('div', null, h('h3', null, n.seen >= 2 || known ? r.names[sel] : 'Somewhere ahead'), h('small', null, kind + (n.seen >= 2 ? ' · visited' : ''))),
+    adj ? U.btn('Drive', () => U.driveTo(sel), { cls:'btn-r', a:'drive' }) : U.btn('Too far', () => {}, { dis:true })),
+    adj ? h('div', { class:'costs' }, h('span', null, ico('clock'), c.hours + ' hours'), h('span', { class:G.fuel < c.fuel ? 'bad' : '' }, ico('fuel'), c.fuel + ' fuel (you have ' + G.fuel + ')'), c.hours > C.hoursLeft(G) ? h('span', { class:'bad' }, 'After dark') : null) : h('p', { class:'hint' }, 'Not connected to where you are. Drive to a neighbour first.'),
+    G.wx !== 'sun' && adj ? h('p', { class:'hint' }, L.WEATHER_BY_ID[G.wx].n + ': ' + L.WEATHER_BY_ID[G.wx].d) : h('span'));
+  return wrap;
+};
+U.screens = screens;
+})(LRT);

@@ -1,144 +1,219 @@
-// The Last Road Trip — game data
+// The Last Road Trip v2 — game data. Pure data, runs in the browser and in Node (balance bot).
 var LRT = (typeof LRT !== 'undefined') ? LRT : {};
-LRT.RARITY = [
-  { id:'worn', name:'Worn', mult:0.8, scrap:1, sell:1 },
-  { id:'solid', name:'Solid', mult:1.0, scrap:2, sell:2 },
-  { id:'rare', name:'Rare', mult:1.3, scrap:3, sell:4 },
-  { id:'legend', name:'Legendary', mult:1.7, scrap:5, sell:8 },
+(function(L){
+const pad = n => (n < 10 ? '0' : '') + n;
+L.img = (set, i) => 'assets/c/' + set + '_' + pad(i) + '.webp';
+L.HUD = { fuel:0, food:1, batt:2, parts:3, film:4, treats:5, clock:6, spirit:7, wear:8, weight:9, map:10, paw:11 };
+L.UI = { blueprint:0, lampOn:1, lampOff:2, look:3, photo:4, star:5, starOff:6, lock:7, feather:8, spark:9, ticket:10, trophy:11 };
+L.WEATHER = [
+  { id:'sun',  n:'Clear',    idx:0, d:'Easy driving.' },
+  { id:'over', n:'Overcast', idx:1, d:'Flat light. Nothing unusual.' },
+  { id:'rain', n:'Rain',     idx:2, d:'Slow roads. +1 hour per drive, slick Close Calls.' },
+  { id:'wind', n:'Wind',     idx:3, d:'Headwind. +1 fuel per drive.' },
+  { id:'dust', n:'Dust',     idx:4, d:'Grit in everything. Extra wear on long drives.' },
+  { id:'fog',  n:'Fog',      idx:5, d:'You can only see the next stop. More animals on the road.' },
 ];
-LRT.ADJ = [
-  ['Slightly Sticky','Duct-Taped','Questionable','Pre-Loved','Wobbly','Grandpa\'s'],
-  ['Trusty','Sturdy','Reliable','Road-Ready','Honest','Sensible'],
-  ['Fancy','Polished','Gleaming','Souped-Up','Premium','Tuned'],
-  ['Mythic','Legendary','Glorious','Absolutely Iconic','Sunkissed','Fabled'],
-];
-LRT.AFFIX = [
-  { id:'stun', name:'of Bonking', d:'+20% stun', stun:0.2 },
-  { id:'crit', name:'of Luck', d:'+15% crit', crit:0.15 },
-  { id:'acc', name:'of Focus', d:'+10% accuracy', acc:0.10 },
-  { id:'beast', name:'of the Wild', d:'+2 dmg vs animals', beast:2 },
-  { id:'human', name:'of Justice', d:'+2 dmg vs humans', human:2 },
-  { id:'snack', name:'of Snacking', d:'Heal 1 on each KO', leech:1 },
-];
-// slot: weapon, jacket, helmet, gloves, boots | use | res | junk
-LRT.ITEMS = {
-  slingshot:{n:'Slingshot',slot:'weapon',img:'it_slingshot',dmg:2,acc:0.86,range:5,w:6,tier:0,d:'Pew. Works at any range.'},
-  bat:{n:'Baseball Bat',slot:'weapon',img:'it_bat',dmg:4,acc:0.9,range:1,w:6,tier:0,d:'Melee. A classic.'},
-  pan:{n:'Frying Pan',slot:'weapon',img:'it_pan',dmg:3,acc:0.95,range:1,stun:0.3,w:5,tier:0,d:'Melee. BONK. 30% stun.'},
-  machete:{n:'Machete',slot:'weapon',img:'it_machete',dmg:5,acc:0.88,range:1,w:4,tier:1,d:'Melee. Swamp-approved.'},
-  crossbow:{n:'Crossbow',slot:'weapon',img:'it_crossbow',dmg:5,acc:0.76,range:5,w:3,tier:1,d:'Ranged. Quiet and mean.'},
-  revolver:{n:'Revolver',slot:'weapon',img:'it_revolver',dmg:6,acc:0.78,range:4,w:2,tier:2,d:'Ranged. Loud and reliable.',loud:1},
-  shotgun:{n:'Shotgun',slot:'weapon',img:'it_shotgun',dmg:8,acc:0.85,range:2,w:2,tier:2,d:'Range 2. Splashes the lanes next door.',splash:1,loud:1},
-  denim:{n:'Denim Jacket',slot:'jacket',img:'it_denim',armor:1,w:6,tier:0,d:'Armor. Timeless.'},
-  leather:{n:'Biker Jacket',slot:'jacket',img:'it_leather',armor:2,hp:2,w:3,tier:1,d:'Armor + max HP.'},
-  helmet:{n:'Bike Helmet',slot:'helmet',img:'it_helmet',armor:1,w:5,tier:0,d:'Armor. No crits against you.',nocrit:1},
-  gloves:{n:'Work Gloves',slot:'gloves',img:'it_gloves',mdmg:1,w:5,tier:0,d:'+melee damage.'},
-  boots:{n:'Hiking Boots',slot:'boots',img:'it_boots',hp:2,flee:0.1,w:5,tier:0,d:'+max HP, +10% flee.'},
-  medkit:{n:'First Aid Kit',slot:'use',img:'it_medkit',heal:8,w:6,val:3,d:'Heal 8 HP.'},
-  molotov:{n:'Molotov',slot:'use',img:'it_molotov',fire:6,w:4,val:3,d:'6 fire damage to a whole lane. Toasts swarms.'},
-  flashbang:{n:'Flashbang',slot:'use',img:'it_flashbang',stunall:1,w:3,val:3,d:'Stun every enemy for a turn.'},
-  bugspray:{n:'Bug Spray',slot:'use',img:'it_bugspray',bug:1,w:5,val:2,d:'Wipes out a swarm. Stings others for 2.'},
-  rocket:{n:'Firework',slot:'use',img:'it_rocket',scare:1,w:4,val:2,d:'Push all enemies back 2 and hit for 2.'},
-  tape:{n:'Duct Tape',slot:'use',img:'it_tape',repair:4,w:6,val:2,d:'Repair Marigold +4.'},
-  lockpick:{n:'Lockpick Set',slot:'use',img:'it_lockpick',pick:1,w:5,val:2,d:'Opens a lockbox or safe.'},
-  binoculars:{n:'Binoculars',slot:'use',img:'it_binoculars',scout:1,w:3,val:3,d:'Reveal every mystery stop in this region.'},
-  chicken:{n:'Rubber Chicken',slot:'use',img:'it_chicken',toy:1,w:3,val:1,d:'Biscuit\'s favorite. +2 bond.'},
-  fuel:{n:'Jerry Can',slot:'res',img:'it_fuel',res:'fuel',amt:3,w:10},
-  beans:{n:'Canned Beans',slot:'res',img:'it_beans',res:'food',amt:2,w:10},
-  water:{n:'Water Bottle',slot:'res',img:'it_water',res:'food',amt:1,w:8},
-  parts:{n:'Spare Parts',slot:'res',img:'it_parts',res:'parts',amt:3,w:9},
-  battery:{n:'Batteries',slot:'res',img:'it_battery',res:'batteries',amt:3,w:9},
-  treat:{n:'Dog Treat',slot:'res',img:'it_treat',res:'treats',amt:1,w:6},
-  kibble:{n:'Kibble Sack',slot:'res',img:'it_kibble',res:'treats',amt:2,w:4},
-  phone:{n:'Cracked Phone',slot:'junk',img:'it_phone',w:5,val:1,d:'14,000 unread emails. None matter now.'},
-  toaster:{n:'Toaster',slot:'junk',img:'it_toaster',w:4,val:2,d:'Makes toast. Needs electricity. And bread.'},
-  hubcap:{n:'Hubcap',slot:'junk',img:'it_hubcap',w:5,val:1,d:'Shiny. Useless. Shiny.'},
-  cassette:{n:'Mystery Mixtape',slot:'junk',img:'it_cassette',w:4,val:3,d:'Labelled "SUMMER JAMZ 98". Traders love it.'},
+L.WEATHER_BY_ID = {}; L.WEATHER.forEach(w => L.WEATHER_BY_ID[w.id] = w);
+
+// ---------- things you carry ----------
+// tags are what a tool can do at a Roadblock
+L.GADGETS = {
+  radio:   { n:'Crank Radio', i:0, d:'Soothes animals at a Standoff. Plays any Mixtape you find.', tags:['music'], sell:3 },
+  binoc:   { n:'Binoculars', i:1, d:'Shows what kind of stop is next to you on the atlas.', sell:3 },
+  compass: { n:'Compass', i:2, d:'Points toward hidden side roads in each region.', sell:3 },
+  tape:    { n:'Duct Tape', i:3, d:'Patch 2 wear off the van, once. Gets used up.', use:'wear', sell:2 },
+  thermos: { n:'Thermos', i:4, d:'Every camp: +1 Spirit.', sell:3 },
+  bag:     { n:'Sleeping Bag', i:5, d:'Sleep rough without losing Spirit.', sell:3 },
+  whistle: { n:'Tin Whistle', i:6, d:'A steady note. Big calm at a Standoff, once per encounter.', tags:['music'], sell:3 },
+  lens:    { n:'Camera Lens', i:7, d:'Better photos: restoring a Wonder gives +1 Spirit.', sell:4 },
+  torch:   { n:'Flashlight', i:8, d:'One extra look at every stop. Fewer hits in night Close Calls.', sell:3 },
+  rope:    { n:'Rope', i:9, d:'Clears a Tangled or Stuck Roadblock.', tags:['tangled','stuck'], sell:3 },
+  hatchet: { n:'Hatchet', i:10, d:'Clears Wood. Opens a lockbox.', tags:['wood'], sell:3 },
+  gloves:  { n:'Work Gloves', i:11, d:'Clears Debris and Spiky things.', tags:['debris'], sell:2 },
 };
-LRT.SLOTS = ['weapon','jacket','helmet','gloves','boots'];
-LRT.SOUVENIRS = {
-  hula:{n:'Hula Bobblehead',d:'First attack each fight deals +3.'},
-  dice:{n:'Fuzzy Dice',d:'+10% crit chance.'},
-  flamingo:{n:'Lawn Flamingo',d:'Heal 3 HP after every fight.'},
-  globe:{n:'Snow Globe',d:'Lingering costs 25% fewer supplies.'},
-  gator:{n:'Gator Bobblehead',d:'+2 damage vs animals.'},
-  trumpet:{n:'Trumpet Keychain',d:'Talk is 25% more convincing.'},
-  dino:{n:'Plastic Dino',d:'Fleeing never dents Marigold.'},
-  horseshoe:{n:'Lucky Horseshoe',d:'+1 item in every container.'},
-  sun:{n:'Sunny Figurine',d:'+1 battery every drive.'},
-  disco:{n:'Disco Ball',d:'Enemies are dazzled for the first turn.'},
-  pelican:{n:'Pelican Plush',d:'Biscuit fetches a bonus item after fights.'},
-  minivan:{n:'Mini Marigold',d:'Marigold +6 max HP, repairs 1 each stop.'},
-  lava:{n:'Lava Lamp',d:'Treats give double bond.'},
+L.GIFTS = {
+  honey:   { n:'Jar of Honey',     i:0,  tags:['sweet'], sell:2 },
+  bread:   { n:'Loaf of Bread',    i:1,  tags:['savory','warm'], sell:1 },
+  bananas: { n:'Bananas',          i:2,  tags:['sweet'], sell:1 },
+  hot:     { n:'Hot Sauce',        i:3,  tags:['savory'], sell:2 },
+  yarn:    { n:'Ball of Yarn',     i:4,  tags:['warm'], sell:2 },
+  book:    { n:'Paperback',        i:5,  tags:['read'], sell:2 },
+  tin:     { n:'Tobacco Tin',      i:6,  tags:['keepsake'], sell:2 },
+  peaches: { n:'Canned Peaches',   i:7,  tags:['sweet'], sell:1 },
+  coffee:  { n:'Coffee Tin',       i:8,  tags:['warm'], sell:2 },
+  cheese:  { n:'Wheel of Cheese',  i:9,  tags:['savory'], sell:2 },
+  flowers: { n:'Wildflowers',      i:10, tags:['bright'], sell:1 },
+  soap:    { n:'Bar of Soap',      i:11, tags:['clean'], sell:1 },
 };
-LRT.COMBOS = [
-  { id:'floridaman', n:'Florida Man', need:['gator','flamingo'], d:'+2 damage on everything.' },
-  { id:'nightfever', n:'Night Fever', need:['disco','lava'], d:'Dazzle lasts 2 turns.' },
-  { id:'luckystreak', n:'Lucky Streak', need:['dice','horseshoe'], d:'Legendary chance doubled.' },
-  { id:'roadroyalty', n:'Road Royalty', need:['minivan','dino'], d:'Marigold +6 more max HP.' },
-  { id:'sunshineband', n:'Sunshine Band', need:['sun','trumpet'], d:'+2 batteries at every trader.' },
-  { id:'beachbum', n:'Beach Bum', need:['hula','pelican'], d:'Camps heal everyone fully.' },
+L.TAGN = { sweet:'something sweet', savory:'something savory', warm:'something warm', read:'something to read', keepsake:'a keepsake', bright:'something bright', clean:'something clean', music:'music' };
+// dashboard keepsakes: passive effects (max 4 on the dash)
+L.SOUV = {
+  conch:    { n:'Conch Shell', i:0, d:'Standoffs start with +10 calm.', fx:{ calm:10 } },
+  postcard: { n:'Faded Postcard', i:1, d:'Vistas give +1 extra Spirit.', fx:{ vista:1 } },
+  marble:   { n:'Glass Marble', i:2, d:'One extra look at every stop.', fx:{ look:1 } },
+  key:      { n:'Brass Key', i:3, d:'Opens safes and lockboxes for free.', fx:{ key:1 } },
+  globe:    { n:'Snow Globe', i:4, d:'Camp: +1 Spirit.', fx:{ camp:1 } },
+  robot:    { n:'Tin Robot', i:5, d:'Repairs cost 1 fewer part (min 1).', fx:{ fix:1 } },
+  boot:     { n:'Boot Charm', i:6, d:'Close Calls forgive one hit.', fx:{ cc:1 } },
+  pressed:  { n:'Pressed Flower', i:7, d:'Haggles open 15 mood higher.', fx:{ haggle:15 } },
+  necklace: { n:'Shell Necklace', i:8, d:'Gas pumps charge 1 less per unit (min 1).', fx:{ gas:1 } },
+  plate:    { n:'Blank License Plate', i:9, d:'Tows are free once per trip.', fx:{ tow:1 } },
+  starpin:  { n:'Star Pin', i:10, d:'Wonders restore for 1 fewer part.', fx:{ wonder:1 } },
+  music:    { n:'Music Box', i:11, d:'Every second drive: +1 Spirit, even without a Mixtape.', fx:{ drive:1 } },
+};
+// Mixtapes: found across trips, kept forever. One plays at a time (needs the crank radio).
+L.TAPES = [
+  { id:'blue',  n:'Blue Highway',     i:0, d:'Every second drive: +1 Spirit.', fx:{ drive:1 }, from:'Start of the trip' },
+  { id:'brass', n:'Sunday Brass',     i:1, d:'Standoffs start with +8 calm.',  fx:{ calm:8 }, from:'Odile, Gulf Coast' },
+  { id:'slow',  n:'Slow Radio',       i:2, d:'Camp: +1 Spirit.',              fx:{ camp:1 }, from:'A Gulf Coast mailbox' },
+  { id:'wide',  n:'Wide Open',        i:3, d:'Haggles open 10 mood higher.',  fx:{ haggle:10 }, from:'Rosa, Texas' },
+  { id:'neon',  n:'Neon Hum',         i:4, d:'Close Calls forgive one hit.',  fx:{ cc:1 }, from:'The Sign Boneyard' },
+  { id:'last',  n:'Last Light',       i:5, d:'Every drive: a little Spirit back.', fx:{ drive:1, camp:1 }, from:'Ines, at Sunspire' },
 ];
-LRT.MODULES = {
-  engine:{n:'Engine', d:['Burns 2 fuel per drive','Burns 2 fuel, 50% chance to burn 1','Burns 1 fuel per drive','Burns 1 fuel, fleeing always works'], cost:[[4,2],[7,4],[11,7]]},
-  tires:{n:'Tires', d:['Flats happen','Fewer flats, +5% flee','No flats','No flats, rough roads cost no extra fuel'], cost:[[3,1],[6,3],[9,5]]},
-  armor:{n:'Armor', d:['Marigold max HP 12','Max HP 16','Max HP 20, ram 3 at fight start','Max HP 24, ram 5'], cost:[[4,2],[7,4],[11,6]]},
-  rack:{n:'Roof Rack', d:['Pack holds 8','Pack holds 10','Pack holds 12','Pack holds 14'], cost:[[3,2],[6,3],[9,5]]},
-  kitchen:{n:'Kitchen', d:['Camp heals 4','Camp heals 7','Camp heals 10','Camp heals 13 and cooks a buff'], cost:[[3,2],[6,3],[9,5]]},
-  dogbed:{n:'Dog Bed', d:['Biscuit recovers in 3 stops','2 stops, +2 Biscuit HP','1 stop, +4 Biscuit HP','Instant patch-up, +6 HP'], cost:[[3,1],[5,3],[8,5]]},
-  solar:{n:'Solar Panel', d:['No solar','+1 battery per drive','+1 battery, +1 fuel every 3 drives','+2 batteries per drive'], cost:[[5,3],[8,5],[12,7]]},
+L.TAPE_BY_ID = {}; L.TAPES.forEach(t => L.TAPE_BY_ID[t.id] = t);
+
+// ---------- companions ----------
+L.PASS = {
+  pelican: { n:'Pelican', i:0, d:'Spots the next fuel: gas stops charge 1 less.', fx:{ gas:1 }, home:'fl' },
+  raccoon: { n:'Raccoon', i:1, d:'Opens any crate, cooler or lockbox, free.', fx:{ key:1 }, home:'gulf' },
+  armadillo:{ n:'Armadillo', i:2, d:'Digs out one extra find at every stop.', fx:{ look:1 }, home:'tx' },
+  crow:    { n:'Crow', i:3, d:'Shows where hidden side roads start.', fx:{ hint:1 }, home:'mj' },
+  cat:     { n:'Barn Cat', i:4, d:'Camp: +1 Spirit.', fx:{ camp:1 }, home:'tx' },
+  rabbit:  { n:'Jackrabbit', i:5, d:'Close Calls forgive one hit.', fx:{ cc:1 }, home:'mj' },
 };
-LRT.ENEMIES = {
-  gator:{n:'Gator',img:'en_gator',hp:11,dmg:3,spd:1,kind:'beast',dist:3,h:0.32,w:1.0,tell:'gator'},
-  snake:{n:'Rattlesnake',img:'en_snake',hp:5,dmg:2,spd:1,kind:'beast',dist:2,h:0.3,w:0.8,tell:'snake'},
-  swarm:{n:'Mosquito Swarm',img:'en_swarm',hp:7,dmg:1,spd:1,kind:'beast',dist:3,h:0.55,w:0.55,tell:'swarm'},
-  boar:{n:'Wild Boar',img:'en_boar',hp:9,dmg:3,spd:1,kind:'beast',dist:4,h:0.36,w:0.95,tell:'boar'},
-  wolf:{n:'Wolf',img:'en_wolf',hp:6,dmg:2,spd:2,kind:'beast',dist:4,h:0.42,w:0.9,tell:'wolf'},
-  krewe:{n:'Toll Bandit',img:'en_krewe',hp:7,dmg:3,spd:1,kind:'human',dist:3,h:0.62,w:0.6,tell:'krewe'},
-  raider:{n:'Welder Raider',img:'en_raider',hp:10,dmg:3,spd:1,kind:'human',dist:4,h:0.64,w:0.6,tell:'raider'},
-  cougar:{n:'Cougar',img:'en_cougar',hp:9,dmg:3,spd:2,kind:'beast',dist:4,h:0.34,w:1.0,tell:'cougar'},
-  bear:{n:'Picnic Bear',img:'en_bear',hp:16,dmg:4,spd:1,kind:'beast',dist:4,h:0.6,w:0.75,tell:'bear'},
-  coyote:{n:'Coyote',img:'en_coyote',hp:5,dmg:2,spd:2,kind:'beast',dist:4,h:0.34,w:0.85,tell:'coyote'},
-  scorpion:{n:'Giant Scorpion',img:'en_scorpion',hp:8,dmg:2,spd:1,kind:'beast',dist:3,h:0.36,w:0.8,tell:'scorpion'},
-  outlaw:{n:'Dusty Dee',img:'en_outlaw',hp:9,dmg:3,spd:1,kind:'human',dist:4,h:0.64,w:0.5,tell:'outlaw'},
-  conman:{n:'Slick Rick',img:'en_conman',hp:6,dmg:1,spd:1,kind:'human',dist:3,h:0.64,w:0.55,tell:'conman'},
+L.NPC = {
+  mara:   { n:'Mara',   img:['npc_a',0], role:'Shrimper' },
+  dot:    { n:'Dot',    img:['npc_a',1], role:'Diner owner' },
+  juniper:{ n:'Juniper',img:['npc_a',2], role:'Hitchhiker' },
+  wendell:{ n:'Wendell',img:['npc_a',3], role:'Trucker' },
+  rosa:   { n:'Rosa',   img:['npc_a',4], role:'Rancher' },
+  odile:  { n:'Odile',  img:['npc_b',0], role:'Band leader' },
+  walt:   { n:'Walt',   img:['npc_b',1], role:'Mail carrier' },
+  dee:    { n:'Dee',    img:['npc_b',2], role:'Sign painter' },
+  ines:   { n:'Ines',   img:['npc_b',3], role:'Sunspire caretaker' },
+  ray:    { n:'Ray Pruitt', img:['npc_b',4], role:'Map seller' },
 };
-LRT.REGIONS = [
-  { id:'fl', n:'The Florida Keys & Swamps', short:'Florida', map:'map_fl', fight:'bg_fight_fl', stops:['stop_gas','stop_attraction','stop_camp'],
-    foes:[['gator'],['snake'],['swarm'],['boar'],['snake','swarm'],['gator','snake'],['conman'],['boar','swarm']],
-    boss:{ n:'Big Al and the Sunbathers', foes:['gator','gator','gator'], bossHp:[18,0,0], intro:'A gator the size of a canoe is sunning on the bridge out of Florida. Two of his cousins are with him. Nobody is moving.' },
-    blurb:'Flamingos, empty resorts and a LOT of gators. Head north, then west.' },
-  { id:'gulf', n:'The Gulf Coast & Bayou', short:'Bayou', map:'map_gulf', fight:'bg_fight_gulf', stops:['stop_town','stop_camp','stop_gas'],
-    foes:[['krewe'],['swarm','swarm'],['boar','boar'],['krewe','krewe'],['conman','krewe'],['gator','swarm'],['snake','boar']],
-    boss:{ n:'The Krewe of the Toll Bridge', foes:['krewe','raider','krewe'], bossHp:[0,16,0], toll:9, intro:'The only bridge west is covered in beads, feathers and very serious people. "TOLL," says their king, through a megaphone made of a tuba.' },
-    blurb:'Spanish moss, brass bands echoing over the water, and a toll bridge with opinions.' },
-  { id:'tx', n:'The Texas Big Empty', short:'Texas', map:'map_tx', fight:'bg_fight_tx', stops:['stop_town','stop_camp','stop_gas'],
-    foes:[['coyote','coyote'],['cougar'],['outlaw'],['snake','coyote'],['boar','coyote'],['outlaw','conman'],['cougar','snake'],['bear']],
-    boss:{ n:'The Rodeo Clown Posse', foes:['outlaw','bear','outlaw'], bossHp:[0,10,0], toll:12, intro:'The road west runs straight through a rodeo arena. Three rodeo clowns, two outlaws and one very large bear in a cowboy hat block the gate. The bear is wearing a name tag. It says KEVIN.' },
-    blurb:'Big sky, bigger hats, and nothing for a hundred miles except a giant boot.' },
-  { id:'mojave', n:'Route 66 & the Mojave', short:'Mojave', map:'map_66', fight:'bg_fight_mojave', stops:['stop_motel','stop_gas','stop_camp'],
-    foes:[['scorpion'],['coyote','coyote','coyote'],['scorpion','coyote'],['outlaw','outlaw'],['cougar','coyote'],['bear','coyote'],['scorpion','scorpion'],['outlaw','raider']],
-    boss:{ n:'The Sand Queen of Amboy', foes:['scorpion','outlaw','scorpion'], bossHp:[0,18,0], toll:15, intro:'The last pass before the coast. Someone has built a throne out of hubcaps in the middle of the road. "Nobody gets to the ocean," says the Sand Queen, "without paying the Queen." Her scorpions click in agreement.' },
-    blurb:'Neon ghosts, Joshua trees and one last pass. You can almost smell the ocean.' },
+
+// ---------- the van: six hardpoints, two parts each ----------
+L.HARD = [
+  { id:'roof',  n:'Roof',   a:'rack',    b:'solar' },
+  { id:'front', n:'Front',  a:'bullbar', b:'winch' },
+  { id:'wheels',n:'Wheels', a:'tires',   b:'spare' },
+  { id:'rear',  n:'Rear',   a:'tank',    b:'toolbox' },
+  { id:'side',  n:'Side',   a:'awning',  b:'stove' },
+  { id:'cab',   n:'Cab',    a:'lantern', b:'cb' },
 ];
-LRT.NODE = {
-  scavenge:{n:'Abandoned House',icon:'nd_scavenge'}, gas:{n:'Gas Station',icon:'nd_gas'}, diner:{n:'Diner',icon:'nd_diner'},
-  trader:{n:'Trader',icon:'nd_trader'}, danger:{n:'Trouble',icon:'nd_danger'}, mystery:{n:'???',icon:'nd_mystery'},
-  attraction:{n:'Roadside Attraction',icon:'nd_attraction'}, camp:{n:'Campsite',icon:'nd_camp'}, mail:{n:'Mailbox',icon:'nd_mail'},
-  goal:{n:'Region Exit',icon:'nd_goal'}, start:{n:'Start',icon:'nd_camp'},
+L.VPARTS = {
+  rack:   { n:'Roof Rack',     i:0,  w:2, cost:3, d:'Carry 4 more things. Catches headwinds: +1 fuel in wind.', bp:'start' },
+  solar:  { n:'Solar Panels',  i:3,  w:2, cost:4, d:'+1 battery at every camp.', bp:'Ray Pruitt' },
+  bullbar:{ n:'Bull Bar',      i:1,  w:3, cost:4, d:'Honking is safer. Clears Debris. Close Calls: forgives a hit.', bp:'Gulf Coast' },
+  winch:  { n:'Winch',         i:11, w:3, cost:5, d:'Clears Heavy and Stuck Roadblocks.', bp:'Texas' },
+  tires:  { n:'Off-road Tires',i:2, w:2, cost:4, d:'Rain and dust cost nothing extra. Close Calls: forgives a hit.', bp:'Florida Wonder' },
+  spare:  { n:'Spare Wheel',   i:6,  w:1, cost:2, d:'Absorbs your first breakdown: no tow.', bp:'start' },
+  tank:   { n:'Water & Fuel Tank', i:4, w:3, cost:4, d:'Fuel capacity 10 → 15.', bp:'Mojave' },
+  toolbox:{ n:'Toolbox',       i:8,  w:1, cost:3, d:'Each part repairs 1 more wear.', bp:'Florida' },
+  awning: { n:'Awning',        i:5,  w:1, cost:3, d:'Camp: +1 Spirit.', bp:'Gulf Wonder' },
+  stove:  { n:'Wood Stove',    i:9,  w:2, cost:4, d:'Camp meals stretch: eat 1 less food each night.', bp:'Texas Wonder' },
+  lantern:{ n:'Lantern',       i:7,  w:1, cost:2, d:'Drive past dusk without penalty: +2 hours a day.', bp:'start' },
+  cb:     { n:'CB Radio',      i:10, w:1, cost:3, d:'Forecasts 3 days. Shows stop types next to you.', bp:'Mojave Wonder' },
 };
-LRT.ACH = [
-  {id:'first_trip',n:'Hit the Road',d:'Finish your first trip, any way.'},
-  {id:'fl_done',n:'Florida Survivor',d:'Leave Florida behind.'},
-  {id:'gulf_done',n:'Toll Free',d:'Cross the Toll Bridge.'},
-  {id:'tx_done',n:'Kevin Says Hi',d:'Get past the rodeo.'},
-  {id:'mojave_done',n:'Off With Her Hubcaps',d:'Beat the Sand Queen.'},
-  {id:'sunspire',n:'Sunspire!',d:'Reach Sunspire Park.'},
-  {id:'legend',n:'Shiny!',d:'Find a Legendary item.'},
-  {id:'dash5',n:'Dashboard Curator',d:'Hold 5 souvenirs at once.'},
-  {id:'combo',n:'Combo Platter',d:'Activate a souvenir combo.'},
-  {id:'goodboy',n:'Who\'s a Good Boy',d:'Reach max bond with Biscuit.'},
-  {id:'scrapper',n:'One Person\'s Trash',d:'Scrap 25 items.'},
-  {id:'pacifist',n:'Talk It Out',d:'Talk your way out of 3 fights.'},
+L.WEIGHT_LIGHT = 4; L.WEIGHT_HEAVY = 8; // 0-4 light, 5-7 normal, 8+ heavy (+1 fuel per drive)
+
+// ---------- animals you meet on the road ----------
+L.CRITTERS = {
+  gator:  { n:'Gator',  i:0, calm:20, pat:5, decay:6, likes:'food', big:1, scrap:'a gator, sunning itself on warm asphalt' },
+  boar:   { n:'Wild Boar', i:1, calm:18, pat:5, decay:8, likes:'food', scrap:'a boar, deciding about you' },
+  bear:   { n:'Black Bear', i:2, calm:15, pat:5, decay:7, likes:'food', big:1, scrap:'a bear with somewhere better to be' },
+  cougar: { n:'Cougar', i:3, calm:12, pat:4, decay:8, likes:'sound', scrap:'a cougar on a fence post' },
+  coyote: { n:'Coyote', i:4, calm:22, pat:6, decay:5, likes:'sound', scrap:'a coyote who has seen your type' },
+  steer:  { n:'Longhorn', i:5, calm:25, pat:6, decay:5, likes:'food', big:1, scrap:'a longhorn, in no hurry at all' },
+};
+// Roadblock obstacles (top-down sprites): tags say what clears them
+L.OBST = {
+  log:     { n:'Fallen Log',      i:0, tags:['wood'] },
+  boulder: { n:'Boulder',         i:1, tags:['heavy'] },
+  barrel:  { n:'Rolled Barrels',  i:2, tags:['debris'] },
+  weed:    { n:'Tumbleweeds',     i:3, tags:['tangled'] },
+  pallet:  { n:'Pallet Pile',     i:4, tags:['wood','debris'] },
+  tire:    { n:'Truck Tire',      i:5, tags:['heavy'] },
+  tarp:    { n:'Tarp & Wire',     i:6, tags:['tangled','stuck'] },
+  puddle:  { n:'Washed-out Dip',  i:7, tags:['stuck'] },
+};
+L.TAGSOLVE = { wood:['hatchet'], heavy:['winch','bullbar'], debris:['gloves','bullbar'], tangled:['rope','hatchet'], stuck:['rope','winch'] };
+L.TAGNAME = { wood:'Wood', heavy:'Heavy', debris:'Debris', tangled:'Tangled', stuck:'Stuck' };
+
+// ---------- the four regions ----------
+// template nodes (same shape every region): [type, sceneSlot, flip, hidden, x, y]
+// atlas positions are per-region (fractions of the painting)
+L.NODE_T = [
+  { t:'town',   s:'town' },      // 0
+  { t:'gas',    s:'gas' },       // 1
+  { t:'stop',   s:'stop' },      // 2
+  { t:'camp',   s:'camp' },      // 3
+  { t:'vista',  s:'vista' },     // 4
+  { t:'wonder', s:'wonderA', w:'A' }, // 5
+  { t:'house',  s:'house' },     // 6
+  { t:'wonder', s:'wonderB', w:'B' }, // 7
+  { t:'wonder', s:'wonderC', w:'C', hidden:1 }, // 8
+  { t:'trader', s:'town', flip:1 }, // 9
+  { t:'camp',   s:'camp', flip:1 },  // 10
+  { t:'gas',    s:'gas', flip:1 },   // 11
+  { t:'stop',   s:'stop', flip:1 },  // 12
+  { t:'cross',  s:'cross' },         // 13
 ];
-if (typeof module !== 'undefined') module.exports = LRT;
+L.EDGES = [[0,1],[0,2],[1,3],[2,3],[2,4],[3,5],[3,6],[4,6],[5,7],[5,9],[6,9],[6,7],[7,8],[7,10],[8,10],[9,10],[9,11],[10,12],[11,12],[11,13],[12,13]];
+L.GEN_POS = [[.20,.88],[.52,.85],[.20,.73],[.46,.70],[.14,.59],[.74,.60],[.36,.52],[.62,.44],[.86,.38],[.30,.37],[.55,.31],[.16,.23],[.42,.19],[.72,.10]];
+L.POS_FN = {
+  fl: p => { // follow the island chain
+    const y = p[1], keys=[[.08,.84],[.2,.84],[.38,.78],[.55,.62],[.7,.40],[.88,.20]]; let cx=.5;
+    for (let i=0;i<keys.length-1;i++){ const a=keys[i],b=keys[i+1]; if (y>=a[0]&&y<=b[0]){ cx=a[1]+(b[1]-a[1])*(y-a[0])/(b[0]-a[0]); } }
+    return [Math.max(.1,Math.min(.9,cx+(p[0]-.4)*.5)), p[1]];
+  },
+};
+L.REGIONS = [
+  { id:'fl', pre:'fl', n:'The Florida Keys', short:'Florida', price:1, weather:{sun:.4,over:.12,rain:.3,wind:.18},
+    blurb:'Salt air and empty resorts. The road runs out over open water.',
+    wild:['gator','boar'], tint:'#6fb7ae',
+    names:['Mara\'s Landing','Gas & Bait','Coral Cafe','Mangrove Camp','Old Pier Lookout','The Big Orange','Stilt House','The Starlite Drive-In','The Lighthouse at Shell Key','Harbor Market','Palm Camp','Tidewater Gas','Flamingo Motel','Seven Mile Bridge'],
+    wonders:{ A:{id:'orange',n:'The Big Orange',cost:3,verb:'Wire the sign',txt:'A fruit stand with a forty-foot orange on the roof. The neon is dead but the glass tubes are all there.', done:'The orange comes on slowly, then all at once. It is the warmest thing for a hundred miles.'},
+              B:{id:'starlite',n:'The Starlite Drive-In',cost:4,verb:'Start the projector',txt:'A white screen on a field of cracked gravel. The projection booth is padlocked but not locked.', done:'Light on the screen. Nothing is playing, and that turns out to be enough.'},
+              C:{id:'lighthouse',n:'Shell Key Lighthouse',cost:4,verb:'Light the lamp',txt:'Red and white stripes, a lamp room with the glass still whole. Someone has been keeping the stairs clear.', done:'The beam sweeps once across the water and keeps going.'} },
+    cross:{ n:'Seven Mile Bridge', seq:['roadblock','closecall'], txt:'The only way west is seven miles of bridge with the sea on both sides. Something has been left across the lane.', len:10 } },
+  { id:'gulf', pre:'gulf', n:'The Gulf Coast', short:'Gulf Coast', price:1, weather:{sun:.22,over:.2,rain:.3,fog:.28},
+    blurb:'Spanish moss, slow water, brass bands somewhere out of sight.',
+    wild:['gator','boar','bear'], tint:'#8a9a6a',
+    names:['Bayou Landing','Pump & Pantry','Dockside Diner','Cypress Camp','River Bend','Bayou Radio WBRT','Crawfish Shack','The Marguerite','Old Millhouse','Boat Dock Market','Mossy Camp','Parish Gas','Kitchen on the Water','The Toll Bridge'],
+    wonders:{ A:{id:'radio',n:'Bayou Radio WBRT',cost:3,verb:'Bring it on air',txt:'A tin shack with a mast taller than any tree. The transmitter hums when you touch it.', done:'The mast starts to sing. Across the water, porch lights flicker on.'},
+              B:{id:'marguerite',n:'The Marguerite',cost:4,verb:'Fire up the boiler',txt:'A riverboat tied to cypress roots. Its calliope is still on the top deck.', done:'The calliope sounds three notes. A heron lifts off, unbothered.'},
+              C:{id:'mill',n:'The Old Millhouse',cost:3,verb:'Free the wheel',txt:'A mill on a creek, wheel jammed with branches. Someone has painted a door green.', done:'The wheel turns. The whole house settles, like it is exhaling.'} },
+    cross:{ n:'The Toll Bridge', seq:['haggle','closecall'], txt:'The bridge has a toll booth, a lantern, and one person who would like to talk first.', len:12 } },
+  { id:'tx', pre:'tx', n:'The Texas Plains', short:'Texas', price:2, weather:{sun:.36,over:.12,rain:.12,wind:.3,dust:.1},
+    blurb:'Big sky, long fences, wind that does not stop and a lot of room to think.',
+    wild:['boar','coyote','steer','cougar'], tint:'#d6a35a',
+    names:['Prairie Junction','Last Chance Pumps','Windmill Cafe','Tank Camp','Storm Watch','Wind Pumps','Rosa\'s Barn Road','The Grain Elevator','The Star Gate','Feed Store Market','Mesa Camp','Highway 9 Gas','Tin Roof Cafe','The Cattle Guard'],
+    wonders:{ A:{id:'windpumps',n:'The Wind Pumps',cost:4,verb:'Free the blades',txt:'A field of windmills, half of them locked in place by rust and bird nests.', done:'The blades catch, one after another, until the whole field is turning.'},
+              B:{id:'elevator',n:'The Grain Elevator',cost:4,verb:'Ring the bell',txt:'Concrete silos, a rail car on a siding. The bell rope hangs just out of reach.', done:'One long note rolls out across the wheat and does not come back.'},
+              C:{id:'stargate',n:'The Star Gate',cost:3,verb:'Wire the stars',txt:'A ranch gate with a steel star on top. Someone has strung lights along the fence.', done:'The star glows amber against the evening, a small thing and a good one.'} },
+    cross:{ n:'The Cattle Guard', seq:['standoff','roadblock'], txt:'The road ahead is a cattle grid across open range. The herd has not heard about the road.', len:12 } },
+  { id:'mj', pre:'mj', n:'Route 66 & the Mojave', short:'Mojave', price:2, weather:{sun:.5,over:.05,wind:.2,dust:.25},
+    blurb:'Salt flats, blue-hour neon and the last long stretch to the coast.',
+    wild:['coyote','cougar','steer'], tint:'#c98d5b',
+    names:['Amboy Junction','Desert Pumps','Starlight Motel','Joshua Camp','Sunset Viewer','The Sign Boneyard','Adobe House','The Dish','The Sundial','Desert Market','Dune Camp','Salt Flat Gas','Pool Hall Motel','Amboy Road'],
+    wonders:{ A:{id:'boneyard',n:'The Sign Boneyard',cost:4,verb:'Light a letter',txt:'A field of enormous painted letters, gone pale from the sun. Dee has been pulling them upright.', done:'One by one, the letters go amber. They almost spell something.'},
+              B:{id:'dish',n:'The Dish',cost:4,verb:'Turn it to the sky',txt:'A radio dish the size of a house, aimed at nothing in particular. The motor still works.', done:'It swings slowly to the east and holds. You can feel it listening.'},
+              C:{id:'sundial',n:'The Sundial',cost:3,verb:'Clear the face',txt:'A bronze gnomon on a stone ring, buried to the hour marks in drifted sand.', done:'The shadow falls exactly where it should. It is later than you thought.'} },
+    cross:{ n:'Amboy Road', seq:['standoff','closecall','roadblock'], txt:'The last pass before the coast. Salt, wind, and a long straight road with surprises on it.', len:14 } },
+];
+L.REG_NAMES = ['Florida','Gulf Coast','Texas','Mojave'];
+
+// shop prices etc
+L.PRICE = { fuel:[1,2,2,3], food:[1,1,2,2], part:[2,3,3,4] };
+L.FUEL_CAP = 10; L.PACK = 8; L.HOURS = 8;
+L.MAXTOW = 4;
+
+// persisted cross-trip things; see core.freshMeta
+L.WONDER_IDS = []; L.REGIONS.forEach(r => ['A','B','C'].forEach(k => L.WONDER_IDS.push(r.wonders[k].id)));
+L.BP_START = ['rack','spare','lantern'];
+
+if (typeof module !== 'undefined') module.exports = L;
+})(LRT);

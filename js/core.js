@@ -1,551 +1,410 @@
-// The Last Road Trip — core rules (no DOM). Runs in browser and in Node for the balance bot.
+// The Last Road Trip v2 — rules. No DOM in here: runs in the browser and in Node (balance bot).
+var LRT = (typeof LRT !== 'undefined') ? LRT : (typeof require !== 'undefined' ? require('./data.js') : {});
 (function(L){
-'use strict';
-var COLS = 7;
-function rng(s){ s.seed = (s.seed + 0x6D2B79F5) >>> 0; var t = s.seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }
-function ri(s,a,b){ return a + Math.floor(rng(s)*(b-a+1)); }
-function pick(s,arr){ return arr[Math.floor(rng(s)*arr.length)]; }
-function wpick(s, pairs){ var t=0,i; for(i=0;i<pairs.length;i++) t+=pairs[i][1]; var r=rng(s)*t; for(i=0;i<pairs.length;i++){ r-=pairs[i][1]; if(r<=0) return pairs[i][0]; } return pairs[pairs.length-1][0]; }
-function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
-L.COLS = COLS;
-L.util = { rng:rng, ri:ri, pick:pick, clamp:clamp };
+const C = {};
+L.core = C;
+// ---------- rng ----------
+C.rnd = G => { let t = (G.rs = (G.rs + 0x6D2B79F5) >>> 0); t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+C.ri = (G, a, b) => a + Math.floor(C.rnd(G) * (b - a + 1));
+C.pick = (G, arr) => arr[Math.floor(C.rnd(G) * arr.length)];
+C.wpick = (G, table) => { let tot = 0; for (const k in table) tot += table[k]; let r = C.rnd(G) * tot; for (const k in table) { r -= table[k]; if (r <= 0) return k; } return Object.keys(table)[0]; };
+C.shuffle = (G, a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(C.rnd(G) * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
-// ---------- derived stats ----------
-function has(s,k){ return s.dash.indexOf(k)>=0; }
-function combos(s){ return L.COMBOS.filter(function(c){ return c.need.every(function(k){ return has(s,k); }); }); }
-function hasCombo(s,id){ return combos(s).some(function(c){ return c.id===id; }); }
-L.has = has; L.combos = combos; L.hasCombo = hasCombo;
-function istat(it){ // item instance -> stats
-  var b = L.ITEMS[it.k], R = L.RARITY[it.r||0], a = it.a>=0 ? L.AFFIX[it.a] : null, o = {};
-  if (b.dmg) o.dmg = Math.max(1, Math.round(b.dmg * R.mult));
-  if (b.acc) o.acc = b.acc + (a&&a.acc||0);
-  if (b.range) o.range = b.range;
-  if (b.armor) o.armor = Math.max(it.r===0?0:1, Math.round(b.armor * R.mult + (it.r>=2?0.4:0)));
-  if (b.hp) o.hp = Math.round(b.hp * R.mult + (it.r>=2?1:0));
-  if (b.mdmg) o.mdmg = Math.max(1, Math.round(b.mdmg * R.mult + (it.r>=2?0.5:0)));
-  if (b.flee) o.flee = b.flee;
-  o.stun = (b.stun||0) + (a&&a.stun||0); o.crit = (a&&a.crit||0); o.beast=(a&&a.beast||0); o.human=(a&&a.human||0); o.leech=(a&&a.leech||0);
-  o.nocrit = b.nocrit; o.splash = b.splash; o.loud = b.loud;
+// ---------- meta (survives across trips) ----------
+C.freshMeta = () => ({ v:2, lamps:{}, bp:{ rack:1, spare:1, lantern:1 }, scrap:{}, tapes:{ blue:1 }, trips:0, arrived:0, best:0, gentle:false, tut:0, tape:'blue', seenNpc:{}, stars:0 });
+
+// ---------- new trip ----------
+C.newGame = (meta, opts) => {
+  opts = opts || {};
+  const G = { v:2, rs:(opts.seed || Date.now()) >>> 0, meta, gentle:!!meta.gentle, reg:0, node:0, day:1, hour:0,
+    fuel:8, food:5, batt:4, parts:0, treats:2, spirit:6, wear:1, gadgets:[], gifts:[], souvs:[], pass:[], tape:meta.tape || 'blue',
+    van:{ roof:null, front:null, wheels:null, rear:null, side:null, cab:null }, spareUsed:false, towFree:false,
+    tows:0, lastLit:0, driveN:0, nodes:null, hid:{}, wx:'sun', fc:[], log:[], seenEv:{}, enc:null, ended:null, won:false,
+    wondersThisTrip:0, hits:0, sightings:0, gbag:null, sbag:null, camps:0, mapSeen:{}, stats:{ drives:0, enc:0, ccHits:0, sfWins:0, hgWins:0, rbDone:0 } };
+  G.gbag = C.shuffle(G, Object.keys(L.GADGETS));
+  G.sbag = C.shuffle(G, Object.keys(L.SOUV));
+  C.enterRegion(G, 0);
+  G.wx = 'sun'; G.fc = [C.rollWx(G), C.rollWx(G), C.rollWx(G)];
+  return G;
+};
+C.enterRegion = (G, r) => {
+  G.reg = r; G.node = 0; G.hour = 0;
+  G.nodes = L.NODE_T.map((t, i) => ({ seen:i === 0 ? 2 : 0, spots:null, ev:null, evDone:false, sniffed:false, looks:0, restored:false, shop:null, talked:false }));
+  G.nodes[0].seen = 2;
+  G.lastLit = 0;
+  C.markSeen(G);
+};
+C.R = G => L.REGIONS[G.reg];
+C.pos = (G, i, r) => { r = (r == null ? G.reg : r); const fn = L.POS_FN[L.REGIONS[r].id]; const p = L.GEN_POS[i]; return fn ? fn(p) : p; };
+
+// ---------- weather & time ----------
+C.rollWx = G => C.wpick(G, C.R(G).weather);
+C.dayLen = G => L.HOURS + (C.has(G, 'lantern') ? 2 : 0);
+C.hoursLeft = G => Math.max(0, C.dayLen(G) - G.hour);
+C.forecastDays = G => C.has(G, 'cb') ? 3 : 1;
+
+// ---------- the van ----------
+C.has = (G, part) => { for (const k in G.van) if (G.van[k] === part) return true; return false; };
+C.weight = G => { let w = 0; for (const k in G.van) if (G.van[k]) w += L.VPARTS[G.van[k]].w; return w; };
+C.wclass = G => { const w = C.weight(G); return w <= L.WEIGHT_LIGHT ? 'light' : w >= L.WEIGHT_HEAVY ? 'heavy' : 'normal'; };
+C.fuelCap = G => C.has(G, 'tank') ? 15 : L.FUEL_CAP;
+C.packCap = G => L.PACK + (C.has(G, 'rack') ? 4 : 0);
+C.packUsed = G => G.gadgets.length + G.gifts.length;
+C.dashCap = 4;
+C.tapeObj = G => (G.meta.tapes[G.tape] && C.has2(G, 'radio')) ? L.TAPE_BY_ID[G.tape] : null;
+C.has2 = (G, g) => G.gadgets.indexOf(g) >= 0;
+// sum of a passive effect from souvenirs, passengers, tape
+C.fx = (G, key) => { let s = 0; G.souvs.forEach(id => { s += (L.SOUV[id].fx[key] || 0); }); G.pass.forEach(id => { s += (L.PASS[id].fx[key] || 0); }); const t = C.tapeObj(G); if (t) s += (t.fx[key] || 0); return s; };
+C.quirks = G => { const q = []; if (G.wear >= 4) q.push({ n:'Pulls to the left', d:'Close Calls have one more obstacle.' }); if (G.wear >= 7) q.push({ n:'Runs rough', d:'+1 fuel on every drive.' }); if (G.wear >= 9) q.push({ n:'Smoke from the hood', d:'One more bump and it stops.' }); return q; };
+C.install = (G, slot, part) => { // returns error string or null
+  const h = L.HARD.find(x => x.id === slot); if (!h || (h.a !== part && h.b !== part)) return 'That does not fit there.';
+  if (!G.meta.bp[part]) return 'You do not have the blueprint yet.';
+  if (G.van[slot] === part) return 'Already installed.';
+  const cost = L.VPARTS[part].cost - (C.fx(G, 'fix') ? 1 : 0); const c = Math.max(1, cost);
+  if (G.parts < c) return 'Needs ' + c + ' parts.';
+  G.parts -= c; G.van[slot] = part; if (G.wear > 0) G.wear = Math.max(0, G.wear - 0); return null;
+};
+C.installCost = (G, part) => Math.max(1, L.VPARTS[part].cost - (C.fx(G, 'fix') ? 1 : 0));
+C.removePart = (G, slot) => { G.van[slot] = null; };
+C.repairPerPart = G => 2 + (C.has(G, 'toolbox') ? 1 : 0);
+C.repair = (G, parts) => { const n = Math.min(parts, G.parts); if (n <= 0 || G.wear <= 0) return 0; const use = Math.min(n, Math.ceil(G.wear / C.repairPerPart(G))); G.parts -= use; const w = Math.min(G.wear, use * C.repairPerPart(G)); G.wear -= w; return w; };
+
+// ---------- map ----------
+C.nbrs = (G, i) => { const out = []; L.EDGES.forEach(e => { let o = -1; if (e[0] === i) o = e[1]; else if (e[1] === i) o = e[0]; if (o < 0) return; if (L.NODE_T[o].hidden && !G.hid[G.reg]) return; if (L.NODE_T[i].hidden && !G.hid[G.reg]) return; out.push(o); }); return out; };
+C.markSeen = G => { C.nbrs(G, G.node).forEach(o => { if (G.nodes[o].seen < 1) G.nodes[o].seen = 1; }); };
+C.typeKnown = (G, i) => { const n = G.nodes[i]; return n.seen >= 2 || n.typeKnown || (C.has2(G, 'binoc') || C.has(G, 'cb')) && C.nbrs(G, G.node).indexOf(i) >= 0; };
+C.revealTypes = G => { G.nodes.forEach(n => { if (n.seen >= 1) n.typeKnown = true; }); G.mapSeen[G.reg] = 1; };
+C.edgeCost = (G, a, b) => {
+  const p = C.pos(G, a), q = C.pos(G, b); const d = Math.hypot((q[0] - p[0]) * .75, q[1] - p[1]);
+  let hours = 1 + Math.round(d * 8), fuel = 1 + Math.round(d * 5);
+  const wx = G.wx; if (wx === 'rain' && !C.has(G, 'tires')) hours += 1; if (wx === 'wind') fuel += (C.has(G, 'rack') ? 2 : 1);
+  if (C.wclass(G) === 'heavy') fuel += 1; if (G.wear >= 7) fuel += 1;
+  if (G.gentle) fuel = Math.max(1, Math.round(fuel * .75));
+  return { hours:hours, fuel:Math.min(5, fuel), dist:d };
+};
+C.canGo = (G, b) => { const c = C.edgeCost(G, G.node, b); const out = { cost:c, ok:true, fuelShort:Math.max(0, c.fuel - G.fuel), dusk:c.hours > C.hoursLeft(G) }; return out; };
+
+// ---------- applying effects ----------
+C.msg = (G, t) => { G.log.push(t); if (G.log.length > 40) G.log.shift(); };
+C.addFuel = (G, n) => { const cap = C.fuelCap(G); const a = Math.max(0, Math.min(n, cap - G.fuel)); G.fuel += a; return a; };
+C.addSpirit = (G, n) => { const b = G.spirit; G.spirit = Math.max(0, Math.min(10, G.spirit + n)); return G.spirit - b; };
+C.addWear = (G, n) => { G.wear = Math.max(0, Math.min(10, G.wear + n)); };
+C.addGadget = G => { // returns id or null
+  const left = G.gbag.filter(id => G.gadgets.indexOf(id) < 0); const id = left.length ? left[0] : null; return id; };
+C.giveItem = (G, kind, id) => { // false when the pack is full
+  if (kind === 'gadget') { if (G.gadgets.indexOf(id) >= 0) return true; if (C.packUsed(G) >= C.packCap(G)) return false; G.gadgets.push(id); G.gbag = G.gbag.filter(x => x !== id); return true; }
+  if (kind === 'gift') { if (C.packUsed(G) >= C.packCap(G)) return false; G.gifts.push(id); return true; }
+  if (kind === 'souv') { if (G.souvs.length >= C.dashCap) return false; if (G.souvs.indexOf(id) < 0) G.souvs.push(id); G.sbag = G.sbag.filter(x => x !== id); return true; }
+  return false;
+};
+// fx: { fuel, food, batt, parts, treats, spirit, wear, hours, gift:id|'*', gadget:id|'*', souv:id|'*', tape:id, pass:id, bp:id, map:1, hint:1, scrap:[id,text], film }
+C.applyFx = (G, fx) => {
+  const out = []; if (!fx) return out;
+  const add = (k, n, label) => { if (!n) return; if (k === 'fuel') { const a = C.addFuel(G, n); out.push({ k, n: n > 0 ? a : n, label }); if (n > 0 && a < n) out.push({ k:'note', t:'Tank is full.' }); } else { G[k] = Math.max(0, G[k] + n); out.push({ k, n }); } };
+  ['fuel', 'food', 'batt', 'parts', 'treats'].forEach(k => add(k, fx[k]));
+  if (fx.film) { G.film = (G.film || 0) + fx.film; }
+  if (fx.spirit) { const d = C.addSpirit(G, fx.spirit); if (d) out.push({ k:'spirit', n:d }); }
+  if (fx.wear) { C.addWear(G, fx.wear); out.push({ k:'wear', n:fx.wear }); }
+  if (fx.hours) { C.spendHours(G, fx.hours); out.push({ k:'hours', n:fx.hours }); }
+  if (fx.gift) { const id = fx.gift === '*' ? C.pick(G, Object.keys(L.GIFTS)) : fx.gift; if (C.giveItem(G, 'gift', id)) out.push({ k:'gift', id }); else out.push({ k:'full', kind:'gift', id }); }
+  if (fx.gadget) { let id = fx.gadget === '*' ? C.addGadget(G) : fx.gadget; if (id) { if (C.giveItem(G, 'gadget', id)) out.push({ k:'gadget', id }); else out.push({ k:'full', kind:'gadget', id }); } else add('batt', 3); }
+  if (fx.souv) { let id = fx.souv === '*' ? (G.sbag.filter(x => G.souvs.indexOf(x) < 0)[0] || G.sbag[0]) : fx.souv; if (id) { if (C.giveItem(G, 'souv', id)) out.push({ k:'souv', id }); else out.push({ k:'full', kind:'souv', id }); } }
+  if (fx.tape) { if (!G.meta.tapes[fx.tape]) { G.meta.tapes[fx.tape] = 1; out.push({ k:'tape', id:fx.tape }); } }
+  if (fx.pass) { if (G.pass.indexOf(fx.pass) < 0) { G.pass.push(fx.pass); G.meta.scrap['p_' + fx.pass] = G.meta.scrap['p_' + fx.pass] || { r:G.reg }; out.push({ k:'pass', id:fx.pass }); } }
+  if (fx.bp) { if (!G.meta.bp[fx.bp]) { G.meta.bp[fx.bp] = 1; out.push({ k:'bp', id:fx.bp }); } else { G.parts += 2; out.push({ k:'parts', n:2 }); } }
+  if (fx.map) { C.revealTypes(G); out.push({ k:'note', t:'The atlas fills in: you can see what is at each stop.' }); }
+  if (fx.hint) { if (!G.hid[G.reg]) { G.hid[G.reg] = 1; C.markSeen(G); out.push({ k:'note', t:'A side road appears on the atlas.' }); } }
+  if (fx.scrap) { const id = fx.scrap; if (!G.meta.scrap[id]) { G.meta.scrap[id] = { r:G.reg, day:G.day }; out.push({ k:'scrap', id }); } }
+  if (fx.hours === undefined) {}
+  return out;
+};
+C.spendHours = (G, h) => { G.hour += h; if (G.hour > C.dayLen(G)) G.hour = C.dayLen(G); };
+
+// ---------- places ----------
+C.nodeT = (G, i) => L.NODE_T[i == null ? G.node : i];
+C.nodeName = (G, i) => L.REGIONS[G.reg].names[i == null ? G.node : i];
+C.sceneKey = (G, i) => { const t = L.NODE_T[i]; return { src:'assets/scene/' + C.R(G).pre + '_' + t.s + '.webp', flip:!!t.flip }; };
+C.pinIdx = (G, i) => { const t = L.NODE_T[i].t; if (t === 'stop') return (G.reg === 3 || i === 12) ? 4 : 1; return { town:5, trader:5, gas:0, camp:2, vista:6, wonder:7, house:3, cross:9 }[t]; };
+C.lampWonder = (G, i) => { const t = L.NODE_T[i]; return t.w ? C.R(G).wonders[t.w] : null; };
+C.wonderCost = (G, i) => Math.max(1, C.lampWonder(G, i).cost - (C.fx(G, 'wonder') ? 1 : 0));
+
+// hidden finds at a stop. Created on arrival.
+const SPOTN = { town:4, gas:4, stop:4, camp:4, vista:3, wonder:3, house:5, trader:3, cross:0 };
+C.makeSpots = (G, i) => {
+  const t = L.NODE_T[i].t, n = SPOTN[t], spots = [], rm = L.REGIONS[G.reg].price;
+  for (let k = 0; k < n; k++) {
+    let x, y, tries = 0; do { x = .12 + C.rnd(G) * .76; y = .5 + C.rnd(G) * .3; tries++; } while (tries < 30 && spots.some(s => Math.hypot(s.x - x, (s.y - y) * 1.1) < .24));
+    const box = (t === 'house' ? C.rnd(G) < .55 : t === 'gas' || t === 'stop' ? C.rnd(G) < .35 : t === 'camp' ? C.rnd(G) < .3 : C.rnd(G) < .22);
+    const s = { x, y, got:false, open:false };
+    if (box) { const kinds = G.reg < 1 ? { crate:5, cooler:4, lockbox:2, mailbox:2, safe:0 } : { crate:4, cooler:3, lockbox:3, mailbox:2, safe:2 }; s.box = C.wpick(G, kinds); }
+    s.fx = C.lootFor(G, s.box);
+    spots.push(s);
+  }
+  return spots;
+};
+C.lootFor = (G, box) => {
+  const m = G.reg >= 2 ? 1.3 : 1; const amt = (a, b) => Math.max(1, Math.round(C.ri(G, a, b) * m));
+  if (!box) { const k = C.wpick(G, { fuel:24, food:9, batt:13, parts:15, treats:5, gift:8, nothing:26 }); if (k === 'fuel') return { fuel:amt(1, 2) }; if (k === 'food') return { food:1 }; if (k === 'batt') return { batt:amt(1, 2) }; if (k === 'parts') return { parts:amt(1, 2) }; if (k === 'treats') return { treats:1 }; if (k === 'gift') return { gift:'*' }; return { spirit:0, junk:1 }; }
+  if (box === 'crate') return C.rnd(G) < .5 ? { parts:amt(1, 3) } : { fuel:amt(1, 3), batt:1 };
+  if (box === 'cooler') return { food:amt(1, 2), gift:'*' };
+  if (box === 'mailbox') return { batt:amt(1, 2), gift:'*', spirit:1 };
+  if (box === 'lockbox') { const r = C.rnd(G); return r < .35 ? { gadget:'*', parts:1 } : r < .6 ? { souv:'*', batt:1 } : { parts:amt(3, 4), batt:1 }; }
+  return C.rnd(G) < .4 ? { souv:'*', batt:3 } : C.rnd(G) < .5 ? { gadget:'*', batt:3 } : { parts:4, batt:4 }; // safe
+};
+C.looksAllowed = G => 3 + 0 + (C.fx(G, 'look')) + (C.has2(G, 'torch') ? 1 : 0);
+C.arrive = G => {
+  const n = G.nodes[G.node], t = L.NODE_T[G.node];
+  n.seen = 2; n.typeKnown = true;
+  if (!n.spots) { n.spots = C.makeSpots(G, G.node); n.looksLeft = n.spots.length + 1 + C.fx(G, 'look') + (C.has2(G, 'torch') ? 1 : 0); }
+  if (['town', 'gas', 'stop', 'camp', 'trader'].indexOf(t.t) >= 0) G.lastLit = G.node;
+  C.markSeen(G);
+  if (t.t === 'vista' && !n.vistaDone) { n.vistaDone = true; C.revealTypes(G); const d = 1 + C.fx(G, 'vista'); C.addSpirit(G, d); G.meta.scrap['v_' + C.R(G).id] = G.meta.scrap['v_' + C.R(G).id] || { r:G.reg, day:G.day }; n.vistaGain = d; }
+  if (C.has(G, 'cb') && G.reg >= 0) {}
+  if (C.fx(G, 'hint') && !G.hid[G.reg]) { G.hid[G.reg] = 1; C.markSeen(G); }
+};
+// a tap on the picture. returns { hit:spot|null, fx, left }
+C.look = (G, nx, ny) => {
+  const n = G.nodes[G.node]; if (!n.spots || n.looksLeft <= 0) return { hit:null, none:true };
+  let best = null, bd = 9; n.spots.forEach(s => { if (s.got) return; const d = Math.hypot(s.x - nx, (s.y - ny) * 1.1); if (d < bd) { bd = d; best = s; } });
+  n.looksLeft--;
+  if (best && bd < .15) { best.got = true; n.looksLeft = Math.min(n.looksLeft + 1, 9); /* a find gives the look back */ if (!best.box) { return { hit:best, left:n.looksLeft, fx:C.applyFx(G, best.fx) }; } return { hit:best, left:n.looksLeft, box:true }; }
+  return { hit:null, left:n.looksLeft };
+};
+C.canOpen = (G, s) => { // how can this container be opened?
+  if (!s.box || s.open) return null; const b = s.box; const free = (b === 'crate' || b === 'cooler' || b === 'mailbox');
+  if (free) return { how:'free' };
+  if (C.fx(G, 'key')) return { how:'key' };
+  if (b === 'lockbox' && C.has2(G, 'hatchet')) return { how:'hatchet' };
+  const cost = b === 'safe' ? 3 : 2; return { how:'parts', cost, ok:G.parts >= cost };
+};
+C.open = (G, s, how) => {
+  if (how && how.how === 'parts') { if (G.parts < how.cost) return null; G.parts -= how.cost; }
+  s.open = true; return C.applyFx(G, s.fx);
+};
+C.sniff = G => { const n = G.nodes[G.node]; if (n.sniffed) { if (G.treats < 1) return null; G.treats--; } n.sniffed = true; return n.spots.filter(s => !s.got).map(s => ({ x:s.x, y:s.y })); };
+
+// ---------- travelling ----------
+C.hunger = G => { // evening meal. returns text lines
+  const out = []; const need = (C.has(G, 'stove') ? 0 : 1) + (G.gentle ? 0 : 0);
+  if (need > 0) { if (G.food >= need) { G.food -= need; } else { const d = C.addSpirit(G, -2); out.push('Not enough food for supper. You go to bed hungry. (Spirit ' + d + ')'); G.food = 0; } }
+  else if (G.driveN % 2 === 0 && G.food > 0) G.food -= 0;
+  if (G.treats > 0 && C.rnd(G) < .25) G.treats--; // Biscuit eats well
+  return out;
+};
+C.newDay = G => { G.day++; G.hour = 0; G.wx = G.fc.shift() || C.rollWx(G); G.fc.push(C.rollWx(G)); };
+C.camp = (G) => {
+  const t = L.NODE_T[G.node].t; const lines = []; G.camps++;
+  lines.push.apply(lines, C.hunger(G));
+  let sp = 0; const n = G.nodes[G.node];
+  if (t === 'camp') sp += 1; else if (t === 'stop' || t === 'town') sp += 1; else if (C.has2(G, 'bag')) sp += 0; else sp -= 1; sp -= 1; /* the miles wear on you */
+  sp += C.fx(G, 'camp') + (C.has(G, 'awning') ? 1 : 0) + (C.has2(G, 'thermos') ? 1 : 0);
+  if (G.food > 0 || G.spirit > 0) {}
+  if (C.has(G, 'solar')) G.batt++;
+  const d = C.addSpirit(G, sp); C.newDay(G);
+  if (G.wear > 0 && t !== 'cross') { }
+  return { lines, spirit:d, sp, solar:C.has(G, 'solar') };
+};
+C.encounterChance = G => { let p = G.gentle ? .45 : .62; if (G.wx === 'fog') p += .12; if (G.wx === 'rain') p += .05; return p; };
+C.rollEncounter = (G, from, to) => {
+  const t = L.NODE_T[to].t; if (G.nodes[to].seen >= 2 && C.rnd(G) < .45) return null; // known roads are quieter
+  if (C.rnd(G) > C.encounterChance(G)) return null;
+  const w = { standoff:3, roadblock:3, haggle:2, closecall:3 };
+  if (G.wx === 'rain') w.closecall += 3; if (G.wx === 'fog') w.standoff += 2; if (G.wx === 'dust') w.roadblock += 2;
+  if (t === 'trader' || t === 'town') w.haggle += 3;
+  if (G.reg === 0 && G.driveN < 2) { return 'haggle'; } // gentle introduction
+  return C.wpick(G, w);
+};
+C.drive = G => {}; // see C.go
+// go to node b. returns { cost, push, night, wearUp, enc, lines }
+C.go = (G, b) => {
+  const c = C.edgeCost(G, G.node, b), res = { cost:c, lines:[], from:G.node, to:b };
+  let fuel = c.fuel; const short = Math.max(0, fuel - G.fuel);
+  G.fuel -= (fuel - short);
+  if (short > 0) { res.push = short; G.hour += short * 2; C.addWear(G, short); const d = C.addSpirit(G, -1); res.lines.push('You push the van the last ' + short * 2 + ' miles. It takes a while. (Spirit ' + d + ')'); }
+  const left = C.hoursLeft(G);
+  const night = c.hours > left; res.night = night;
+  G.hour += c.hours; if (G.hour > C.dayLen(G)) G.hour = C.dayLen(G);
+  G.driveN++; G.stats.drives++;
+  // wear
+  let w = C.rnd(G) < .65 ? 1 : 0; if (c.dist > .24 && C.rnd(G) < .3) w++; if (G.wx === 'dust' && !C.has(G, 'tires') && c.dist > .2) w++; if (night) w++; if (C.wclass(G) === 'heavy' && C.rnd(G) < .3) w++;
+  C.addWear(G, w); res.wearUp = w;
+  if (night) C.addSpirit(G, -1);
+  if (C.rnd(G) < .4) { const d0 = C.addSpirit(G, -1); if (d0) res.drain = true; }
+  // music
+  const dr = C.fx(G, 'drive'); if (dr && G.driveN % 2 === 0) { const d = C.addSpirit(G, 1); if (d) res.lines.push('Music on the radio. (Spirit +1)'); }
+  G.prevNode = res.from; G.node = b; C.arrive(G);
+  res.enc = (G.node === 13) ? null : C.rollEncounter(G, res.from, b);
+  if (G.wear >= 10) res.breakdown = true;
+  return res;
+};
+C.breakdown = G => { // wear 10: spare wheel absorbs the first one
+  if (C.has(G, 'spare') && !G.spareUsed) { G.spareUsed = true; G.wear = 5; return { saved:true }; }
+  return { saved:false };
+};
+C.tow = (G, why) => {
+  G.tows++; G.enc = null; if (why && why.indexOf('cross') === 0) G.crossFails = (G.crossFails || 0) + 1;
+  const free = C.fx(G, 'tow') && !G.towFree; let fee = 3; if (free) { G.towFree = true; fee = 0; }
+  const paid = Math.min(G.batt, fee); G.batt -= paid;
+  const to = G.lastLit; G.node = to; G.wear = Math.min(G.wear, 3);
+  C.addSpirit(G, -1); C.newDay(G); G.food = Math.max(0, G.food - 0);
+  C.markSeen(G);
+  const over = !G.gentle && G.tows > L.MAXTOW; if (over) G.ended = 'tows';
+  return { to, paid, fee, free, over, why };
+};
+
+// ---------- gas station mechanic ----------
+C.fixFee = G => (G.reg >= 2 ? 2 : 1);
+C.mechanic = (G) => { if (G.wear <= 0) return { err:'Nothing to fix.' }; const fee = C.fixFee(G); if (G.batt < fee) return { err:'Not enough batteries.' }; G.batt -= fee; const w = Math.min(G.wear, 2); G.wear -= w; C.spendHours(G, 1); return { ok:true, w, fee }; };
+// ---------- trading ----------
+C.price = (G, k) => { let p = L.PRICE[k][G.reg]; if (k === 'fuel' && C.fx(G, 'gas')) p = Math.max(1, p - 1); return p; };
+C.buy = (G, k, n) => { // k: fuel, food, part
+  const unit = C.price(G, k), cost = unit * n; if (G.batt < cost) return { err:'Not enough batteries.' };
+  if (k === 'fuel') { if (G.fuel + n > C.fuelCap(G)) return { err:'The tank will not hold that much.' }; G.fuel += n; }
+  else if (k === 'food') G.food += n; else G.parts += n; G.batt -= cost; return { ok:true, cost };
+};
+C.sellValue = (G, kind, id) => (kind === 'gadget' ? L.GADGETS[id].sell : L.GIFTS[id].sell);
+C.sell = (G, kind, id) => { const arr = kind === 'gadget' ? G.gadgets : G.gifts; const i = arr.indexOf(id); if (i < 0) return 0; arr.splice(i, 1); const v = C.sellValue(G, kind, id); G.batt += v; return v; };
+C.shopFor = G => {
+  const n = G.nodes[G.node]; if (n.shop) return n.shop;
+  const unk = Object.keys(L.VPARTS).filter(p => !G.meta.bp[p]);
+  const items = []; if (unk.length) items.push({ bp:unk[C.ri(G, 0, unk.length - 1)], price:8 });
+  const gad = G.gbag.filter(id => G.gadgets.indexOf(id) < 0); if (gad.length) items.push({ gadget:gad[0], price:6 });
+  if (!G.mapSeen[G.reg]) items.push({ map:1, price:3 });
+  if (!G.hid[G.reg]) items.push({ hint:1, price:4 });
+  n.shop = items; return items;
+};
+
+// ---------- encounter: Standoff ----------
+C.sfNew = G => {
+  const r = C.R(G), cid = C.pick(G, r.wild), c = L.CRITTERS[cid];
+  const st = { kind:'standoff', cid, calm:c.calm + C.fx(G, 'calm') + (G.spirit >= 7 ? 6 : 0) - (G.spirit <= 2 ? 8 : 0) + (G.gentle ? 12 : 0), pat:c.pat + (G.gentle ? 1 : 0), used:{}, log:[], turn:0, done:null };
+  return st;
+};
+C.sfActions = (G, st) => {
+  const c = L.CRITTERS[st.cid], A = [];
+  A.push({ id:'wait', label:'Hold still and wait', sub:'Costs nothing. Calm +' + (10 + (G.spirit >= 6 ? 3 : 0)) });
+  A.push({ id:'talk', label:'Speak low and slow', sub:'Calm +' + (14 + Math.floor(G.spirit / 2)) });
+  A.push({ id:'food', label:'Set out some food', sub:'1 food. Calm +' + (c.likes === 'food' ? 52 : 32), dis:G.food < 1 ? 'No food' : null });
+  A.push({ id:'dog', label:'Have Biscuit sit', sub:'Calm +' + (st.cid === 'coyote' ? 6 : 18) });
+  if (C.has2(G, 'whistle') && !st.used.whistle) A.push({ id:'whistle', label:'Play the tin whistle', sub:'Calm +' + (c.likes === 'sound' ? 50 : 30) + ', once' });
+  if (C.has2(G, 'radio') && !st.used.radio) A.push({ id:'radio', label:'Turn the radio down low', sub:'1 battery. Calm +' + (c.likes === 'sound' ? 40 : 24), dis:G.batt < 1 ? 'No batteries' : null });
+  A.push({ id:'honk', label:'Honk', sub:Math.round(C.honkP(G, st) * 100) + '% it leaves at once. Otherwise it gets nervous.' });
+  A.push({ id:'back', label:'Back away', sub:'Return to ' + C.nodeName(G, G.prevNode) + '. Costs 1 hour.' });
+  return A;
+};
+C.honkP = (G, st) => (C.has(G, 'bullbar') ? .75 : .45) - (L.CRITTERS[st.cid].big ? .15 : 0);
+C.sfAct = (G, st, id) => {
+  const c = L.CRITTERS[st.cid]; let msg = '', gain = 0; st.turn++;
+  if (id === 'wait') { gain = 10 + (G.spirit >= 6 ? 3 : 0); msg = 'You hold still. The ' + c.n.toLowerCase() + ' watches you, then watches the road.'; }
+  else if (id === 'talk') { gain = 14 + Math.floor(G.spirit / 2); msg = 'You tell it, quietly, that you are only passing through.'; }
+  else if (id === 'food') { G.food--; gain = c.likes === 'food' ? 52 : 32; msg = 'You set a ration at the edge of the shoulder and step back.'; }
+  else if (id === 'dog') { gain = st.cid === 'coyote' ? 6 : 18; msg = st.cid === 'coyote' ? 'Biscuit sits, but the coyote and Biscuit have opinions about each other.' : 'Biscuit sits and keeps very still, which seems to help.'; }
+  else if (id === 'whistle') { st.used.whistle = 1; gain = c.likes === 'sound' ? 50 : 30; msg = 'One long, level note. The ' + c.n.toLowerCase() + ' tips its head.'; }
+  else if (id === 'radio') { st.used.radio = 1; G.batt--; gain = c.likes === 'sound' ? 40 : 24; msg = 'Something low and slow comes out of the radio.'; }
+  else if (id === 'honk') {
+    if (C.rnd(G) < C.honkP(G, st)) { st.done = 'fled'; msg = 'It startles, and is gone into the brush. That works, but nobody feels good about it.'; return { msg, done:'fled' }; }
+    gain = -22; msg = 'The horn goes off and the ' + c.n.toLowerCase() + ' flattens its ears. It is not leaving.';
+  }
+  else if (id === 'back') { st.done = 'back'; return { msg:'You ease the van backwards until the road bends. It is not worth it.', done:'back' }; }
+  st.calm += gain; st.pat--; if (gain > 0) { /* nothing */ }
+  if (st.calm >= 100) { st.done = 'win'; return { msg, done:'win' }; }
+  st.calm = Math.max(0, st.calm - c.decay + (G.gentle ? 3 : 0));
+  if (st.pat <= 0) { st.done = 'fail'; return { msg:msg + ' The ' + c.n.toLowerCase() + ' has lost patience. The van takes a hit and you retreat.', done:'fail' }; }
+  return { msg, done:null };
+};
+C.sfFinish = G => {
+  const st = G.enc, out = { fx:[], lines:[] };
+  C.spendHours(G, 1);
+  if (st.done === 'win') { const c = L.CRITTERS[st.cid]; G.stats.sfWins++; out.fx = C.applyFx(G, { spirit:1, scrap:'c_' + st.cid }); if (C.rnd(G) < .4) out.fx = out.fx.concat(C.applyFx(G, { gift:'*' })); out.lines.push('The ' + c.n.toLowerCase() + ' wanders off the road. You wait until it is out of sight.'); }
+  else if (st.done === 'fail') { C.addWear(G, 2); out.tow = true; }
+  else if (st.done === 'back') { G.node = G.prevNode; out.back = true; }
+  return out;
+};
+
+// ---------- encounter: Roadblock ----------
+C.rbNew = G => {
+  const ids = Object.keys(L.OBST); const oid = C.pick(G, ids), o = L.OBST[oid];
+  return { kind:'roadblock', oid, tags:o.tags.slice(0, G.reg < 1 ? 1 : (C.rnd(G) < .4 ? 2 : 1)).slice(), solved:[], log:[], done:null, hours:0 };
+};
+C.rbTools = (G, tag) => { const out = []; L.TAGSOLVE[tag].forEach(t => { if (L.GADGETS[t] && C.has2(G, t)) out.push({ id:t, kind:'gadget' }); else if (L.VPARTS[t] && C.has(G, t)) out.push({ id:t, kind:'part' }); }); return out; };
+C.rbHand = (G, st, tag) => { st.solved.push(tag); C.spendHours(G, 2); C.addWear(G, 1); st.hours += 2; return 'You clear it by hand. It takes two hours and the van does not like the dust.'; };
+C.rbUse = (G, st, tag, toolId) => { st.solved.push(tag); C.spendHours(G, 1); st.hours += 1; return L.GADGETS[toolId] ? 'The ' + L.GADGETS[toolId].n.toLowerCase() + ' does the job.' : 'The ' + L.VPARTS[toolId].n.toLowerCase() + ' does the job.'; };
+C.rbCut = (G, st, tag) => { if (G.parts < 2) return null; G.parts -= 2; st.solved.push(tag); C.spendHours(G, 1); return 'You cut through with spare parts. Two parts, one hour.'; };
+C.rbDone = (st) => st.tags.every(t => st.solved.indexOf(t) >= 0);
+C.rbFinish = G => { G.stats.rbDone++; const fx = C.rnd(G) < .55 ? C.applyFx(G, C.rnd(G) < .5 ? { parts:1 } : { batt:2 }) : []; return { fx }; };
+
+// ---------- encounter: Haggle ----------
+const WANTS = ['sweet', 'savory', 'warm', 'read', 'keepsake', 'bright', 'clean'];
+C.hgNew = (G, who) => {
+  const w = C.shuffle(G, WANTS).slice(0, 2); who = who || C.pick(G, ['ray', 'ray', 'wendell', 'juniper', 'dot', 'walt']);
+  return { kind:'haggle', who, wants:w, mood:20 + C.fx(G, 'haggle') + (G.spirit >= 7 ? 5 : 0) + (G.gentle ? 10 : 0), offered:[], done:null, tier:0 };
+};
+C.hgScore = (G, st, ids) => { let m = st.mood; const got = {}; ids.forEach(id => { const tags = L.GIFTS[id].tags; const hit = tags.find(t => st.wants.indexOf(t) >= 0 && !got[t]); if (hit) { got[hit] = 1; m += 40; } else m += 8; }); return m; };
+C.hgOffer = (G, st, ids) => { // ids: gift ids from pack (may repeat)
+  const m = C.hgScore(G, st, ids); st.offered = ids.slice(); ids.forEach(id => { const i = G.gifts.indexOf(id); if (i >= 0) G.gifts.splice(i, 1); });
+  st.mood = m; st.tier = m >= 80 ? 3 : m >= 52 ? 2 : m >= 25 ? 1 : 0; st.done = 'ok'; return st.tier;
+};
+C.hgRewards = (G, st) => {
+  const t = st.tier; const o = [];
+  if (t >= 3) { o.push({ l:'4 parts', fx:{ parts:4 } }); o.push({ l:'6 fuel', fx:{ fuel:6 } }); const unk = Object.keys(L.VPARTS).filter(p => !G.meta.bp[p]); if (unk.length) o.push({ l:'A blueprint: ' + L.VPARTS[unk[0]].n, fx:{ bp:unk[0] } }); else o.push({ l:'A gadget', fx:{ gadget:'*' } }); }
+  else if (t === 2) { o.push({ l:'2 parts', fx:{ parts:2 } }); o.push({ l:'3 fuel', fx:{ fuel:3 } }); o.push({ l:'3 batteries', fx:{ batt:3 } }); }
+  else if (t === 1) { o.push({ l:'2 batteries', fx:{ batt:2 } }); o.push({ l:'1 food, 1 fuel', fx:{ food:1, fuel:1 } }); }
+  else o.push({ l:'Walk away', fx:{ spirit:0 } });
   return o;
-}
-L.istat = istat;
-function iname(it){ var b=L.ITEMS[it.k]; if (b.slot==='use'||b.slot==='res'||b.slot==='junk') return b.n; var adj = L.ADJ[it.r][it.n % L.ADJ[it.r].length]; return adj+' '+b.n+(it.a>=0?' '+L.AFFIX[it.a].name:''); }
-L.iname = iname;
-function ival(it){ var b=L.ITEMS[it.k]; if (b.val) return b.val; return L.RARITY[it.r].sell + (it.a>=0?1:0); }
-function iscrap(it){ var b=L.ITEMS[it.k]; if (b.slot==='junk') return 2; if (b.slot==='use') return 1; return L.RARITY[it.r].scrap; }
-L.ival = ival; L.iscrap = iscrap;
-function gearSum(s,f){ var t=0; L.SLOTS.forEach(function(sl){ var it=s.gear[sl]; if(it){ var st=istat(it); t+=st[f]||0; } }); return t; }
-function hpMax(s){ return 20 + gearSum(s,'hp'); }
-function armor(s){ return gearSum(s,'armor'); }
-function vanMax(s){ return 12 + 4*s.van.mods.armor + (has(s,'minivan')?6:0) + (hasCombo(s,'roadroyalty')?6:0); }
-function packCap(s){ return 8 + 2*s.van.mods.rack; }
-function dogMax(s){ return 10 + 2*s.van.mods.dogbed; }
-function dashCap(s){ return 4 + Math.min(2, s.region); }
-function weapon(s){ return s.gear.weapon ? istat(s.gear.weapon) : {dmg:1,acc:0.92,range:1,stun:0,crit:0,beast:0,human:0,leech:0}; }
-L.hpMax=hpMax; L.armor=armor; L.vanMax=vanMax; L.packCap=packCap; L.dogMax=dogMax; L.dashCap=dashCap; L.weapon=weapon;
-// Lingering (extra searches, camping, waiting) costs supplies instead of a chase timer.
-function linger(s, amt){ s.wear=(s.wear||0)+amt*(has(s,'globe')?0.75:1); var out=[]; while (s.wear>=1){ s.wear-=1; if (s.res.food>0){ s.res.food--; out.push('-1 food'); } else { s.hp-=2; out.push('-2 HP (hungry)'); } } if (out.length) say(s,'Time passes: '+out.join(', ')+'.','info'); }
-L.linger = linger;
-function fuelCost(s){ var e=s.van.mods.engine; return e>=2?1:2; }
-L.fuelCost = fuelCost;
+};
 
-function say(s,t,kind){ s.log.push({t:t,k:kind||'info',id:++s.logId}); if (s.log.length>40) s.log.shift(); }
-L.say = say;
-
-// ---------- items ----------
-var uid = 0;
-function mkItem(s,k,r,a){ return { k:k, r:r||0, a:(a===undefined?-1:a), n:ri(s,0,99), id:(++s.uid) }; }
-L.mkItem = mkItem;
-function rollRarity(s, tier, bonus){
-  var leg = (tier===0 && bonus<1) ? 0 : (2 + 2*tier + 3*bonus) * (hasCombo(s,'luckystreak')?2:1);
-  return wpick(s, [[0, Math.max(10, 46 - 9*tier - 8*bonus)], [1, 36], [2, 11 + 5*tier + 6*bonus], [3, leg]]);
-}
-function rollItem(s, tier, bonus, cat){
-  cat = cat || wpick(s, [['res',40],['use',22],['gear',26],['junk',12]]);
-  var keys = Object.keys(L.ITEMS).filter(function(k){ var b=L.ITEMS[k];
-    if (cat==='gear') return L.SLOTS.indexOf(b.slot)>=0 && (b.tier||0) <= tier+ (bonus>0?1:0);
-    return b.slot===cat; });
-  var k = wpick(s, keys.map(function(k){ return [k, L.ITEMS[k].w]; }));
-  var b = L.ITEMS[k], r = 0, a = -1;
-  if (L.SLOTS.indexOf(b.slot)>=0){ r = rollRarity(s,tier,bonus); if (r>=2) a = ri(s,0,L.AFFIX.length-1); if (b.slot!=='weapon' && a>=0 && L.AFFIX[a].id!=='crit' && L.AFFIX[a].id!=='snack') a=-1; }
-  return mkItem(s,k,r,a);
-}
-L.rollItem = rollItem;
-var CT = { crate:{n:'Supply Crate',items:[2,3],bonus:0}, cooler:{n:'Cooler',items:[2,2],bonus:0,food:1}, lockbox:{n:'Lockbox',items:[3,3],bonus:1,lock:1}, safe:{n:'Safe',items:[4,4],bonus:2,lock:2} };
-L.CT = CT;
-function mkContainer(s,type,tier){
-  var c = CT[type], n = ri(s,c.items[0],c.items[1]) + (has(s,'horseshoe')?1:0), items=[];
-  for (var i=0;i<n;i++){ var cat = c.food && i===0 ? 'res' : undefined; var it = rollItem(s,tier,c.bonus,cat); if (c.food && i===0) it = mkItem(s, pick(s,['beans','water','beans']),0); items.push(it); }
-  if (c.bonus>=1){ items.sort(function(a,b){ return (b.r||0)-(a.r||0); }); var it2 = items[items.length-1]; }
-  return { type:type, items:items, open:false, lock:c.lock||0, sniff:0, taken:[] };
-}
-L.mkContainer = mkContainer;
-
-// ---------- run setup ----------
-function newRun(opt){
-  opt = opt||{};
-  var s = { v:3, seed:(opt.seed>>>0)||((Date.now()*2654435761)>>>0), daily:!!opt.daily, uid:0, logId:0, log:[],
-    region:0, col:0, node:null, map:null, day:1, wear:0,
-    res:{ fuel:8, food:7, parts:2, treats:2, batteries:4 },
-    hp:20, gear:{ weapon:null, jacket:null, helmet:null, gloves:null, boots:null }, pack:[], dash:[],
-    van:{ hp:12, mods:{ engine:0, tires:0, armor:0, rack:0, kitchen:0, dogbed:0, solar:0 } },
-    dog:{ hp:10, bond:1, hurt:0 }, hiker:null, flags:{}, screen:'map', stop:null, fight:null, trader:null, loot:null,
-    stats:{ kills:0, scrapped:0, talks:0, fights:0, stops:0, legend:0, items:0, t0:Date.now(), drives:0 }, mailed:null, ended:null };
-  s.gear.weapon = mkItem(s,'slingshot',1); s.gear.jacket = mkItem(s,'denim',1);
-  s.pack.push(mkItem(s,'medkit')); s.pack.push(mkItem(s,'bat',0));
-  if (opt.gift){ s.pack.push(opt.gift); s.flags.gift = 1; }
-  genMap(s);
-  say(s,'Day 1. Key West. The radio crackles: "Sunspire Park... lights are on... come west." Biscuit wags. Marigold coughs. Let\'s go.','story');
-  return s;
-}
-L.newRun = newRun;
-
-function genMap(s){
-  var nodes=[], edges=[], R=L.REGIONS[s.region], id=0;
-  var cols=[];
-  for (var c=0;c<COLS;c++){
-    var n = (c===0||c===COLS-1) ? 1 : (c===1||c===COLS-2 ? ri(s,2,3) : ri(s,2,3));
-    var col=[];
-    for (var j=0;j<n;j++){ var y = n===1?0.5:(0.18 + 0.64*j/(n-1)) + (rng(s)-0.5)*0.08; col.push({ id:id++, col:c, y:y, x:c/(COLS-1), type:'scavenge', done:false, seen:true }); }
-    cols.push(col);
+// ---------- encounter: Close Call ----------
+C.ccNew = (G, len, crossing) => {
+  len = len || (G.reg >= 2 ? 11 : 9);
+  const beat = !!C.tapeObj(G), gap = beat ? .95 : (G.gentle ? 1.3 : 1.1), rows = []; let t = 1.6, last = 1;
+  const extra = G.wear >= 4 ? 1 : 0; const slick = (G.wx === 'rain' && !C.has(G, 'tires')) ? 1 : 0;
+  const n = Math.round(len / gap) + extra;
+  for (let k = 0; k < n; k++) {
+    const lanes = [0, 0, 0]; let c = (C.rnd(G) < .25 && !G.gentle) ? 2 : 1; const free = C.ri(G, Math.max(0, last - 1), Math.min(2, last + 1));
+    // keep a lane reachable from the last free lane
+    for (let l = 0; l < 3 && c > 0; l++) { if (l !== free) { lanes[l] = 1; c--; } }
+    if (C.rnd(G) < .6) { const l = [0, 1, 2].filter(x => x !== free); if (l.length) lanes[l[C.ri(G, 0, l.length - 1)]] = 1; }
+    lanes[free] = 0; last = free;
+    rows.push({ t:+t.toFixed(2), lanes, sp:lanes.map(l => l ? C.ri(G, 0, 7) : -1) });
+    t += gap;
   }
-  // types
-  var pool = [['scavenge',24],['danger',15],['mystery',16],['gas',12],['diner',8],['attraction',10],['camp',6],['trader',6]];
-  for (c=1;c<COLS-1;c++) cols[c].forEach(function(nd){ nd.type = wpick(s,pool); });
-  function force(t, c0, c1){ var ok=false; for (var c=c0;c<=c1;c++) cols[c].forEach(function(n){ if(n.type===t) ok=true; }); if(!ok){ var c=ri(s,c0,c1); pick(s,cols[c]).type=t; } }
-  force('trader',2,4); force('camp',3,5); force('attraction',1,4); force('gas',1,3);
-  if (s.region===0 || rng(s)<0.7) force('mail',2,4);
-  // no two identical types in the same column if avoidable
-  cols[0][0].type='start'; cols[COLS-1][0].type='goal';
-  // edges
-  for (c=0;c<COLS-1;c++){
-    var A=cols[c], B=cols[c+1];
-    A.forEach(function(a,i){ var j = Math.round(i*(B.length-1)/Math.max(1,A.length-1)); edges.push([a.id,B[j].id]); if (rng(s)<0.55){ var j2 = clamp(j+(rng(s)<0.5?-1:1),0,B.length-1); if(j2!==j) edges.push([a.id,B[j2].id]); } });
-    B.forEach(function(b){ if (!edges.some(function(e){return e[1]===b.id;})){ var a = A[Math.round(B.indexOf(b)*(A.length-1)/Math.max(1,B.length-1))]; edges.push([a.id,b.id]); } });
-  }
-  // mystery hidden
-  nodes = [].concat.apply([], cols);
-  nodes.forEach(function(n){ if (n.type==='mystery') n.seen=false; n.rough = false; });
-  edges = edges.map(function(e){ return { a:e[0], b:e[1], rough: rng(s)<0.18 }; });
-  s.map = { nodes:nodes, edges:edges };
-  s.node = cols[0][0].id; s.col = 0; cols[0][0].done = true;
-}
-L.genMap = genMap;
-function nodeById(s,id){ return s.map.nodes[id]; }
-L.nodeById = nodeById;
-function nextNodes(s){ return s.map.edges.filter(function(e){ return e.a===s.node; }).map(function(e){ return { node:nodeById(s,e.b), rough:e.rough }; }); }
-L.nextNodes = nextNodes;
+  return { kind:'closecall', rows, len:t + 1, beat, slick, speed:G.gentle ? .85 : 1, tol:C.ccTol(G) + (crossing ? (G.reg >= 2 ? -1 : 0) + (G.crossFails || 0) : 0) - (crossing ? 0 : 0), hits:0, done:null, crossing:!!crossing };
+};
+C.ccTol = G => 3 + C.fx(G, 'cc') + (C.has(G, 'bullbar') ? 1 : 0) + (C.has(G, 'tires') ? 1 : 0) + (G.gentle ? 2 : 0);
+C.ccFinish = (G, st, hits, crossing) => {
+  G.stats.ccHits += hits; const out = { hits, lines:[], fail:false };
+  C.addWear(G, Math.min(hits, 3)); if (hits > 2) C.addSpirit(G, -1);
+  if (hits === 0) { const d = C.addSpirit(G, st.beat ? 2 : 1); out.lines.push('Clean run. (Spirit +' + d + ')'); }
+  if (crossing && hits > st.tol) out.fail = true;
+  return out;
+};
+// the bot / auto-tester samples a Close Call with a skill (probability of dodging each row)
+C.ccSim = (G, st, skill) => { let h = 0; st.rows.forEach(() => { if (C.rnd(G) > skill) h++; }); return h; };
 
-// ---------- travel ----------
-function travel(s, nid){
-  if (s.screen!=='map') return false;
-  var opt = nextNodes(s).filter(function(o){ return o.node.id===nid; })[0]; if (!opt) return false;
-  var fc = fuelCost(s);
-  if (s.van.mods.engine===1 && rng(s)<0.5) fc = 1;
-  if (opt.rough && s.van.mods.tires<3) fc += 1;
-  var msg = [];
-  if (s.res.fuel >= fc) s.res.fuel -= fc; else { var miss = fc - s.res.fuel; s.res.fuel = 0; s.hp -= 3*miss; s.van.hp -= miss; msg.push('Out of gas! You push Marigold the rest of the way (-'+(3*miss)+' HP).'); }
-  var eat = 1 + (s.hiker?1:0);
-  if (s.res.food >= eat) s.res.food -= eat; else { s.res.food = 0; s.hp -= 1; s.dog.bond = Math.max(0, s.dog.bond-1); msg.push('No snacks. Everyone is hangry (-1 HP, Biscuit sulks).'); }
-  if (rng(s) < 0.05+0.025*s.region){ s.van.hp -= 1; msg.push('Marigold rattles. Something fell off (-1 Marigold).'); }
-  if (s.van.mods.solar) { s.res.batteries += (s.van.mods.solar>=3?2:1); }
-  if (s.van.mods.solar>=2 && (s.stats.drives%3)===2) s.res.fuel += 1;
-  if (has(s,'sun')) s.res.batteries += 1;
-  s.stats.drives++;
-  // road events
-  var r = rng(s);
-  var flat = [0.16,0.08,0,0][s.van.mods.tires];
-  if (r < flat){ if (s.res.parts>=1){ s.res.parts--; msg.push('Flat tire! Patched it with 1 part.'); } else { s.van.hp -= 2; msg.push('Flat tire! You drive on the rim (-2 Marigold).'); } }
-  else if (r < flat+0.07){ s.van.hp -= 2; msg.push('Pothole the size of a hot tub (-2 Marigold).'); }
-  else if (r < flat+0.12){ s.res.food += 1; msg.push('Biscuit spots a roadside mango tree. +1 food.'); }
-  else if (r < flat+0.16){ s.res.batteries += 2; msg.push('An abandoned car still has batteries in the flashlight. +2 batteries.'); }
-  s.node = nid; s.col = opt.node.col; s.day++; s.stats.stops++;
-  var nd = opt.node; nd.done = true; nd.seen = true;
-  if (has(s,'minivan') && s.van.hp < vanMax(s)) s.van.hp++;
-  if (s.dog.hurt>0){ s.dog.hurt--; if (s.dog.hurt===0){ s.dog.hp = Math.max(4, Math.round(dogMax(s)*0.6)); msg.push('Biscuit hops out of the dog bed, tail going. He\'s back!'); } }
-  if (s.van.hp <= 0){ if (s.res.parts>=3){ s.res.parts-=3; s.van.hp=3; msg.push('Marigold died... you rebuild her carburetor with 3 parts. She lives!'); } else if (takeUse(s,'tape')){ s.van.hp=4; msg.push('Marigold sputtered out. Duct tape saves the day (+4).'); } else { msg.forEach(function(m){ say(s,m,'warn'); }); return endRun(s,'van'); } }
-  msg.forEach(function(m){ say(s,m,'warn'); });
-  if (s.hp <= 0) return endRun(s,'hp');
-  arrive(s, nd);
-  return true;
-}
-L.travel = travel;
-function takeUse(s,k){ for (var i=0;i<s.pack.length;i++) if (s.pack[i].k===k){ s.pack.splice(i,1); return true; } return false; }
-function countUse(s,k){ return s.pack.filter(function(i){ return i.k===k; }).length; }
-L.countUse = countUse;
+// ---------- wonders ----------
+C.restore = G => {
+  const w = C.lampWonder(G, G.node), n = G.nodes[G.node]; const cost = C.wonderCost(G, G.node);
+  if (n.restored) return { err:'Already restored.' }; if (G.parts < cost) return { err:'Needs ' + cost + ' parts.' };
+  G.parts -= cost; n.restored = true; C.spendHours(G, 1); G.wondersThisTrip++;
+  const first = !G.meta.lamps[w.id]; G.meta.lamps[w.id] = 1;
+  const BP = { orange:'tires', marguerite:'awning', elevator:'stove', dish:'cb' };
+  const fx = { spirit:2 + (C.has2(G, 'lens') ? 1 : 0), scrap:'w_' + w.id }; if (BP[w.id]) fx.bp = BP[w.id];
+  const out = C.applyFx(G, fx); const extra = C.applyFx(G, { gift:'*', batt:2 });
+  return { out:out.concat(extra), first, w };
+};
+C.lamps = meta => Object.keys(meta.lamps).length;
 
-function tier(s){ return s.region; }
-function arrive(s, nd){
-  var t = nd.type, T = tier(s);
-  s.stop = { type:t, node:nd.id, ev:null, result:null, next:null, searches:0, bg:null };
-  if (t==='mystery'){ if (rng(s)<0.3){ startFight(s, rollFoes(s), {reward:'lockbox', node:'mystery', intro:'It was a trap! Something was waiting in the bushes.'}); return; } t = 'event'; }
-  if (t==='danger'){ startFight(s, rollFoes(s,true), {reward:'lockbox', node:'danger'}); return; }
-  if (t==='goal'){ startBoss(s); return; }
-  if (t==='trader'){ openTrader(s); return; }
-  var evs = L.EVENTS.filter(function(e){ return e.at.indexOf(t)>=0 && (!e.region || e.region.indexOf(s.region)>=0) && (!e.cond || e.cond(s)) && !s.flags['ev_'+e.id]; });
-  var ev = pick(s, evs.length?evs:L.EVENTS.filter(function(e){return e.at.indexOf('event')>=0;}));
-  if (ev.once) s.flags['ev_'+ev.id]=1;
-  s.stop.ev = ev.id; s.stop.bg = ev.bg ? (typeof ev.bg==='function'? ev.bg(s): ev.bg) : null;
-  s.stop.text = typeof ev.text==='function' ? ev.text(s) : ev.text;
-  s.screen = 'stop';
-}
-function rollFoes(s, hard){
-  var R=L.REGIONS[s.region]; var f = pick(s,R.foes).slice();
-  if (hard && f.length<3 && rng(s)<0.55) f.push(pick(s,pick(s,R.foes)));
-  if (s.col<=1 && s.region===0) f = f.slice(0,1);
-  return f;
-}
-L.rollFoes = rollFoes;
+// ---------- end of region ----------
+C.nextRegion = G => {
+  const done = G.reg; G.meta.scrap['x_' + L.REGIONS[done].id] = G.meta.scrap['x_' + L.REGIONS[done].id] || { r:done, day:G.day };
+  if (done >= 3) { G.won = true; return { win:true }; }
+  G.crossFails = 0; C.enterRegion(G, done + 1); C.newDay(G);
+  const fx = C.applyFx(G, { fuel:4, food:3, spirit:2, batt:2 }); return { fx };
+};
+C.stars = G => 1 + (G.tows <= 2 ? 1 : 0) + (G.wondersThisTrip >= 6 ? 1 : 0);
 
-// ---------- events / choices ----------
-function choose(s, i){
-  if (s.screen!=='stop' || s.stop.result) return false;
-  var ev = L.EVENTS.filter(function(e){ return e.id===s.stop.ev; })[0];
-  var ch = ev.choices(s)[i]; if (!ch || (ch.req && !ch.req(s))) return false;
-  var r = ch.go(s) || {}; s.stop.result = r.text || '...'; s.stop.next = r.next || null; s.stop.choice = i;
-  if (s.hp<=0) { endRun(s,'hp'); }
-  return true;
-}
-L.choose = choose;
-function proceed(s){ // after an event result
-  if (s.screen!=='stop') return;
-  var nx = s.stop.next; s.stop.next=null;
-  if (!nx){ toMap(s); return; }
-  if (nx.fight){ startFight(s, nx.fight, nx); return; }
-  if (nx.loot){ openLoot(s, nx.loot, nx); return; }
-  if (nx.trader){ openTrader(s, nx.trader); return; }
-  toMap(s);
-}
-L.proceed = proceed;
-function toMap(s){ s.screen='map'; s.loot=null; s.fight=null; s.trader=null; s.stop=null; if (s.col===COLS-1) regionDone(s); }
-L.toMap = toMap;
-
-function give(s,k,n){ s.res[k] = Math.max(0,(s.res[k]||0)+n); }
-L.give = give;
-function heal(s,n){ s.hp = Math.min(hpMax(s), s.hp+n); }
-L.heal = heal;
-function bond(s,n){ var b0=s.dog.bond; s.dog.bond = clamp(s.dog.bond + n*(n>0&&has(s,'lava')?2:1), 0, 10); return s.dog.bond-b0; }
-L.bond = bond;
-
-// ---------- loot ----------
-function openLoot(s, list, opt){
-  opt = opt||{};
-  var T = opt.tier!==undefined?opt.tier:tier(s);
-  s.loot = { cs: list.map(function(t){ return mkContainer(s,t,T); }), cur:0, search: !!opt.search, title: opt.title||null };
-  s.screen = 'loot';
-}
-L.openLoot = openLoot;
-function lootC(s){ return s.loot.cs[s.loot.cur]; }
-function sniff(s){ var c=lootC(s); if (!c || c.open || s.dog.hurt>0) return false; var max = s.dog.bond>=3?2:1; if (c.sniff>=max) return false; c.sniff++; say(s,'Biscuit sniffs the '+CT[c.type].n.toLowerCase()+'... '+(c.items[c.sniff-1].r>=2?'his tail goes wild!':'he seems mildly interested.'),'dog'); return true; }
-function openC(s, how){
-  var c = lootC(s); if (!c || c.open) return false;
-  if (c.lock){
-    if (how==='pick'){ if (!takeUse(s,'lockpick')) return false; }
-    else if (how==='force'){ var cost = c.lock===2?4:2; if (s.res.parts<cost) return false; s.res.parts-=cost; if (rng(s)<0.25){ c.items.pop(); say(s,'You pry it open... something inside crunched.','warn'); } }
-    else return false;
-  }
-  c.open = true; c.items.forEach(function(it){ if (it.r===3 && L.SLOTS.indexOf(L.ITEMS[it.k].slot)>=0) { s.stats.legend++; s.flags.legend=1; } });
-  return true;
-}
-function applyRes(s,it){ var b=L.ITEMS[it.k]; var amt = b.amt + (it.k==='parts'? tier(s):0) + (it.k==='battery'? tier(s):0); give(s,b.res,amt); return amt; }
-function takeItem(s, idx){
-  var c = lootC(s); if (!c||!c.open) return false; var it = c.items[idx]; if (!it || c.taken[idx]) return false;
-  var b = L.ITEMS[it.k];
-  if (b.slot==='res'){ var a=applyRes(s,it); c.taken[idx]='res'; s.stats.items++; return true; }
-  if (s.pack.length >= packCap(s)) return false;
-  s.pack.push(it); c.taken[idx]='take'; s.stats.items++; return true;
-}
-function scrapLoot(s, idx){ var c=lootC(s); if(!c||!c.open) return false; var it=c.items[idx]; if(!it||c.taken[idx]) return false; var b=L.ITEMS[it.k]; if (b.slot==='res'){ return takeItem(s,idx); } s.res.parts += iscrap(it); s.stats.scrapped++; c.taken[idx]='scrap'; return true; }
-function takeAll(s){ var c=lootC(s); if(!c||!c.open) return; c.items.forEach(function(it,i){ if(!c.taken[i]) takeItem(s,i); }); }
-function scrapJunkLoot(s){ var c=lootC(s); if(!c||!c.open) return; c.items.forEach(function(it,i){ if(!c.taken[i] && isJunkish(s,it)) scrapLoot(s,i); }); }
-function isJunkish(s,it){ var b=L.ITEMS[it.k]; if (b.slot==='junk') return true; if (L.SLOTS.indexOf(b.slot)>=0){ var cur=s.gear[b.slot]; if (cur && gearScore(it)<=gearScore(cur)) return true; } return false; }
-L.isJunkish = isJunkish;
-function gearScore(it){ var st=istat(it), b=L.ITEMS[it.k]; if (b.slot==='weapon') return st.dmg*(st.acc||0.8)*(st.range>1?1.15:1)*(1+st.stun+st.crit) + st.beast*0.3+st.human*0.3+st.leech*0.5; return (st.armor||0)*3 + (st.hp||0) + (st.mdmg||0)*2 + (st.flee||0)*5 + (st.nocrit?0.5:0); }
-L.gearScore = gearScore;
-function nextC(s){ if (s.loot.cur < s.loot.cs.length-1){ s.loot.cur++; return true; } leaveLoot(s); return false; }
-function leaveLoot(s){ var st = s.stop; s.loot=null; if (st && st.type==='scavenge' && st.searchable){ s.screen='stop'; st.result=null; st.again=true; return; } toMap(s); }
-function searchAgain(s){ var st=s.stop; if (!st||!st.again) return false; st.searches++; linger(s,0.5); st.again=false;
-  if (rng(s) < 0.22 + 0.1*st.searches){ startFight(s, [pick(s,['snake','boar','swarm'])], {reward:null, intro:'Something did NOT want to be disturbed.'}); return true; }
-  if (rng(s) < 0.75 - 0.2*st.searches){ st.searchable = st.searches<2; openLoot(s,[pick(s,['crate','crate','cooler'])],{}); say(s,'You find a closet nobody checked.','good'); return true; }
-  say(s,'Nothing but dust bunnies and a cookbook. This place is picked clean.','info'); st.searchable=false; toMap(s); return true; }
-L.loot = { sniff:sniff, open:openC, take:takeItem, scrap:scrapLoot, takeAll:takeAll, scrapJunk:scrapJunkLoot, next:nextC, leave:leaveLoot, again:searchAgain, cur:lootC };
-
-// ---------- pack ----------
-function equip(s, idx){ var it=s.pack[idx]; if(!it) return false; var b=L.ITEMS[it.k]; if (L.SLOTS.indexOf(b.slot)<0) return false; var old=s.gear[b.slot]; s.gear[b.slot]=it; s.pack.splice(idx,1); if (old) s.pack.push(old); s.hp=Math.min(s.hp,hpMax(s)); return true; }
-function scrapPack(s, idx){ var it=s.pack[idx]; if(!it) return false; s.res.parts += iscrap(it); s.pack.splice(idx,1); s.stats.scrapped++; return true; }
-function scrapAllJunk(s){ var n=0; for (var i=s.pack.length-1;i>=0;i--) if (isJunkish(s,s.pack[i])){ scrapPack(s,i); n++; } return n; }
-function usePack(s, idx){ var it=s.pack[idx]; if(!it) return false; var b=L.ITEMS[it.k];
-  if (b.heal){ if (s.hp>=hpMax(s)) return false; heal(s,b.heal); }
-  else if (b.repair){ if (s.van.hp>=vanMax(s)) return false; s.van.hp=Math.min(vanMax(s),s.van.hp+b.repair); }
-  else if (b.toy){ bond(s,2); say(s,'SQUEAK. Biscuit loses his mind with joy. +bond','dog'); }
-  else if (b.scout){ s.map.nodes.forEach(function(n){ n.seen=true; }); say(s,'You scan the horizon. Every mystery stop is revealed.','good'); }
-  else return false;
-  s.pack.splice(idx,1); return true; }
-function treatDog(s){ if (s.res.treats<1) return false; s.res.treats--; var g=bond(s,1); if (s.dog.hurt>0){ s.dog.hurt=Math.max(1,s.dog.hurt-1); } else s.dog.hp=Math.min(dogMax(s), s.dog.hp+3); say(s, s.dog.bond>=10?'Biscuit looks at you like you invented the sun. Max bond!':'Biscuit devours the treat. Bond '+s.dog.bond+'/10','dog'); if (s.dog.bond>=10) s.flags.goodboy=1; return true; }
-L.pack = { equip:equip, scrap:scrapPack, scrapJunk:scrapAllJunk, use:usePack, treat:treatDog };
-
-// ---------- dashboard ----------
-function addSouvenir(s,k){ if (has(s,k)) return false; if (s.dash.length>=dashCap(s)) return false; var before=combos(s).length; s.dash.push(k); if (k==='minivan'){ s.van.hp+=6; } if (combos(s).length>before){ s.flags.combo=1; say(s,'COMBO! '+combos(s)[combos(s).length-1].n+': '+combos(s)[combos(s).length-1].d,'good'); if (combos(s).some(function(c){return c.id==='roadroyalty';})) s.van.hp=Math.min(vanMax(s),s.van.hp+6); } if (s.dash.length>=5) s.flags.dash5=1; return true; }
-function dropSouvenir(s,k){ var i=s.dash.indexOf(k); if(i<0) return false; s.dash.splice(i,1); s.van.hp=Math.min(s.van.hp,vanMax(s)); return true; }
-function randomSouvenirs(s,n){ var pool=Object.keys(L.SOUVENIRS).filter(function(k){ return !has(s,k); }); var out=[]; while(out.length<n && pool.length){ var i=Math.floor(rng(s)*pool.length); out.push(pool.splice(i,1)[0]); } return out; }
-L.dash = { add:addSouvenir, drop:dropSouvenir, random:randomSouvenirs };
-function offerSouvenir(s, keys, why){ s.offer = { keys:keys, why:why||'Pick a souvenir for the dashboard' }; }
-function takeOffer(s, k){ if (!s.offer) return false; if (k && s.offer.keys.indexOf(k)>=0){ if (!addSouvenir(s,k)) return false; say(s,L.SOUVENIRS[k].n+' is now riding on the dashboard.','good'); } s.offer=null; return true; }
-L.offerSouvenir = offerSouvenir; L.takeOffer = takeOffer;
-
-// ---------- garage ----------
-function upCost(s,m){ var lv=s.van.mods[m]; var c=L.MODULES[m].cost[lv]; return c?{parts:c[0],batteries:c[1]}:null; }
-function upgrade(s,m){ var c=upCost(s,m); if(!c) return false; if (s.res.parts<c.parts||s.res.batteries<c.batteries) return false; s.res.parts-=c.parts; s.res.batteries-=c.batteries; s.van.mods[m]++; if (m==='armor') s.van.hp+=4; if (m==='dogbed'){ s.dog.hp+=2; if (s.dog.hurt>0) s.dog.hurt=Math.max(1,s.dog.hurt-1); } say(s,L.MODULES[m].n+' upgraded! '+L.MODULES[m].d[s.van.mods[m]],'good'); return true; }
-function repairVan(s){ var need=vanMax(s)-s.van.hp; if (need<=0||s.res.parts<1) return false; var n=Math.min(need, s.res.parts*2); s.res.parts -= Math.ceil(n/2); s.van.hp+=n; return true; }
-L.garage = { cost:upCost, upgrade:upgrade, repair:repairVan };
-
-// ---------- trader ----------
-function openTrader(s, who){
-  var T=tier(s); who = who || (s.flags.metDot && rng(s)<0.4 ? pick(s,['dot','dot','velvet']) : 'dot'); s.flags.metDot=1;
-  var stock=[]; for (var i=0;i<4;i++){ var it=rollItem(s,T, i===0?1:0, i<2?'gear':'use'); stock.push({it:it, price: ival(it)*2 + 1 + T}); }
-  var sv = randomSouvenirs(s,1)[0];
-  s.trader = { who:who, stock:stock, sv:sv, svPrice: 7+2*T, sold:[], svSold:false,
-    svc:[ {k:'fuel',n:'3 Fuel',give:{fuel:3},cost:3}, {k:'food',n:'3 Food',give:{food:3},cost:3}, {k:'parts',n:'3 Parts',give:{parts:3},cost:4}, {k:'treats',n:'2 Treats',give:{treats:2},cost:2} ] };
-  if (hasCombo(s,'sunshineband')) { s.res.batteries+=2; say(s,'Sunshine Band! The trader tips you 2 batteries for the tune.','good'); }
-  s.screen='trader';
-}
-L.openTrader = openTrader;
-function buy(s,i){ var t=s.trader, o=t.stock[i]; if(!o||t.sold[i]) return false; if (s.res.batteries<o.price||s.pack.length>=packCap(s)) return false; s.res.batteries-=o.price; s.pack.push(o.it); t.sold[i]=1; return true; }
-function buySvc(s,i){ var o=s.trader.svc[i]; if(!o||s.res.batteries<o.cost) return false; s.res.batteries-=o.cost; for (var k in o.give) give(s,k,o.give[k]); o.cost+=1; return true; }
-function buySv(s){ var t=s.trader; if(!t.sv||t.svSold||s.res.batteries<t.svPrice) return false; if(!addSouvenir(s,t.sv)) return false; s.res.batteries-=t.svPrice; t.svSold=true; return true; }
-function sell(s,idx){ var it=s.pack[idx]; if(!it) return false; s.res.batteries += ival(it); s.pack.splice(idx,1); return true; }
-function sellJunk(s){ var n=0,b=0; for (var i=s.pack.length-1;i>=0;i--) if (isJunkish(s,s.pack[i])){ b+=ival(s.pack[i]); sell(s,i); n++; } return {n:n,b:b}; }
-function leaveTrader(s){ s.trader=null; toMap(s); }
-L.trade = { buy:buy, svc:buySvc, sv:buySv, sell:sell, sellJunk:sellJunk, leave:leaveTrader };
-
-// ---------- combat ----------
-function startFight(s, foes, opt){
-  opt = opt||{}; var T=tier(s);
-  var f = { foes:[], turn:1, first:true, dazzle: has(s,'disco') ? (hasCombo(s,'nightfever')?2:1) : 0, dogCd:{bark:0,bite:0,fetch:0}, brace:false,
-    reward: opt.reward===undefined?'crate':opt.reward, boss:!!opt.boss, toll:opt.toll||0, intro:opt.intro||null, saved:false, fx:[], talkTried:false, angry:0, node:opt.node||null, name:opt.name||null, svOffer: opt.svOffer||0 };
-  var lanes=[1,0,2];
-  foes.forEach(function(k,i){ var d=L.ENEMIES[k]; var hp=Math.round(d.hp*(1+0.14*T)) + (opt.bossHp&&opt.bossHp[i]?opt.bossHp[i]:0);
-    f.foes.push({ k:k, hp:hp, max:hp, dist: Math.min(5, d.dist + (i>0&&rng(s)<0.5?1:0)), lane:lanes[i%3], dmg: d.dmg + Math.floor(T*0.4) + (opt.bossHp&&opt.bossHp[i]?1:0), stun:0, st:{}, alpha: k==='wolf' && !f.foes.some(function(e){return e.k==='wolf';}), boss: !!(opt.bossHp&&opt.bossHp[i]), intent:null, id:i, gone:false }); });
-  s.fight = f; s.screen='fight'; s.stats.fights++;
-  if (s.van.mods.armor>=2){ var t0=f.foes[0], ram = s.van.mods.armor>=3?5:3; t0.hp-=ram; f.fx.push({t:'ram',id:t0.id,n:ram}); say(s,'Marigold rams the '+L.ENEMIES[t0.k].n.toLowerCase()+' on the way in! ('+ram+')','good'); if (t0.hp<=0) killFoe(s,t0); }
-  f.foes.forEach(function(e){ setIntent(s,e); });
-  return f;
-}
-L.startFight = startFight;
-function startBoss(s){
-  var R=L.REGIONS[s.region], B=R.boss;
-  startFight(s, B.foes, { boss:true, reward:'safe', bossHp:B.bossHp, toll:B.toll||0, intro:B.intro, name:B.n, svOffer:3 });
-}
-function alive(f){ return f.foes.filter(function(e){ return !e.gone; }); }
-L.alive = alive;
-function setIntent(s,e){
-  var f=s.fight, d=L.ENEMIES[e.k], I;
-  if (e.stun>0){ e.intent={t:'stunned'}; return; }
-  if (f.dazzle>0){ e.intent={t:'dazzled'}; return; }
-  var dmg = e.dmg + (e.st.howl||0) + f.angry;
-  switch(d.tell){
-    case 'wolf':
-      if (e.alpha && (f.turn%3)===2 && !e.st.howled){ I={t:'howl'}; break; }
-      I = e.dist>1 ? {t:'move',n:d.spd} : {t:'attack',dmg:dmg}; break;
-    case 'boar':
-      if (e.st.pawed){ I={t:'charge',dmg:dmg*2}; break; }
-      if (e.dist>=2 && rng(s)<0.55){ I={t:'paw'}; break; }
-      I = e.dist>1 ? {t:'move',n:1} : {t:'attack',dmg:dmg}; break;
-    case 'snake':
-      if (e.dist>1){ I={t:'move',n:1}; break; }
-      I = e.st.rattled ? {t:'bite',dmg:dmg+2} : {t:'rattle'}; break;
-    case 'gator':
-      if (e.dist>1){ I = (e.st.subNext ? {t:'submerge',n:1} : {t:'move',n:1}); e.st.subNext=!e.st.subNext; break; }
-      I = e.st.jaws ? {t:'roll',dmg:dmg*2+1} : {t:'jaws'}; break;
-    case 'swarm':
-      I = e.dist<=2 ? {t:'sting',dmg:dmg+(e.boss?1:0)} : {t:'move',n:1}; break;
-    case 'raider':
-      if (e.st.lit){ I={t:'throw',dmg:dmg+2}; break; }
-      if (e.dist>=2 && !e.st.threw && rng(s)<0.6){ I={t:'light'}; break; }
-      I = e.dist>1 ? {t:'move',n:1} : {t:'attack',dmg:dmg}; break;
-    case 'conman':
-      if (e.st.dist){ I={t:'steal'}; break; }
-      if (e.dist<=3 && !e.st.did){ I={t:'distract'}; break; }
-      I = e.dist>1 ? {t:'move',n:1} : {t:'attack',dmg:dmg}; break;
-    case 'cougar':
-      if (e.st.pawed){ I={t:'pounce',dmg:dmg*2}; break; }
-      if (e.dist<=3 && rng(s)<0.6){ I={t:'stalk'}; break; }
-      I = e.dist>1 ? {t:'move',n:d.spd} : {t:'attack',dmg:dmg}; break;
-    case 'bear':
-      if (e.dist>1){ I={t:'move',n:1}; break; }
-      if (s.res.food>0 && !e.st.ate && rng(s)<0.45){ I={t:'snack'}; break; }
-      I = e.st.pawed ? {t:'maul',dmg:dmg*2} : {t:'rear'}; break;
-    case 'coyote':
-      if (e.hp<=2){ I={t:'scram'}; break; }
-      I = e.dist>1 ? {t:'move',n:d.spd} : {t:'attack',dmg:dmg}; break;
-    case 'scorpion':
-      if (e.dist>1){ I={t:'move',n:1}; break; }
-      I = e.st.pawed ? {t:'stab',dmg:dmg+2} : {t:'tailup'}; break;
-    case 'outlaw':
-      if (e.st.pawed){ I={t:'shoot',dmg:dmg+2}; break; }
-      if (e.dist>=2 && rng(s)<0.5){ I={t:'aim'}; break; }
-      I = e.dist>1 ? {t:'move',n:1} : {t:'attack',dmg:dmg}; break;
-    default:
-      I = e.dist>1 ? {t:'move',n:d.spd} : {t:'attack',dmg:dmg};
-  }
-  e.intent = I;
-}
-L.INTENT = { move:'Advancing', attack:'Attack', howl:'Howling! Pack gets +1 dmg', paw:'Pawing the dirt... CHARGE next turn', charge:'CHARGE!', rattle:'Rattling... bite next turn', bite:'Venom bite', submerge:'Submerging (can\'t be shot)', jaws:'Jaws open... death roll next', roll:'DEATH ROLL', sting:'Stinging from range', light:'Lighting a molotov...', throw:'Throwing fire!', distract:'"Hey, look over there!"', steal:'Grabbing your stuff!', stunned:'Stunned', stalk:'Stalking low... POUNCE next', pounce:'POUNCE!', snack:'Sniffing your snacks...', rear:'Rearing up... MAUL next', maul:'MAUL!', scram:'About to scram', tailup:'Tail raised... sting next', stab:'Poison sting', aim:'Taking aim... shot next', shoot:'Bang!', dazzled:'Dazzled by the disco ball', };
-function heroDmgBase(s, e, power){
-  var w=weapon(s), d=L.ENEMIES[e.k], dmg=w.dmg;
-  if (w.range<=1) dmg += gearSum(s,'mdmg');
-  if (d.kind==='beast'){ dmg += w.beast + (has(s,'gator')?2:0); } else dmg += w.human;
-  if (hasCombo(s,'floridaman')) dmg += 2;
-  if (s.fight.first && has(s,'hula')) dmg += 3;
-  if (s.hiker && s.hiker.k==='juniper') dmg += 1;
-  if (power) dmg = Math.round(dmg*1.7);
-  return dmg;
-}
-function hitChance(s,e,power){ var w=weapon(s); var a = w.acc - 0.04*Math.max(0,e.dist-1) - (power?0.15:0); if (e.k==='swarm' && w.range<=1) a-=0.1; return clamp(a,0.05,0.98); }
-function canHit(s,e){ var w=weapon(s); if (e.gone) return false; if (e.dist>w.range) return false; if (e.intent && e.intent.t==='submerge' && w.range>1 && e.dist>1) return false; return true; }
-L.hitChance = hitChance; L.canHit = canHit; L.heroDmgBase = heroDmgBase;
-function dmgFoe(s,e,n,src){ var f=s.fight; e.hp-=n; f.fx.push({t:'hit',id:e.id,n:n,src:src||'hero'}); if (e.hp<=0) killFoe(s,e); }
-function killFoe(s,e){ var f=s.fight; if (e.gone) return; e.gone=true; e.hp=0; s.stats.kills++; f.fx.push({t:'ko',id:e.id}); var w=weapon(s); if (w.leech) heal(s,w.leech); }
-function heroAct(s, act, tid, extra){
-  var f=s.fight; if (!f || s.screen!=='fight' || f.over) return false;
-  var e = tid!==undefined && tid!==null ? f.foes[tid] : null, w=weapon(s);
-  f.fx=[]; f.brace=false;
-  if (act==='attack'||act==='power'){
-    if (!e || !canHit(s,e)) return false;
-    var p = hitChance(s,e,act==='power');
-    if (rng(s) < p){
-      var dmg = heroDmgBase(s,e,act==='power'), crit = rng(s) < 0.08 + w.crit + (has(s,'dice')?0.1:0);
-      if (crit) dmg*=2;
-      if (e.k==='swarm' && w.range<=1) dmg = Math.max(1, Math.ceil(dmg/2));
-      dmgFoe(s,e,dmg, crit?'crit':'hero');
-      if (!e.gone && rng(s) < w.stun){ e.stun=1; f.fx.push({t:'stun',id:e.id}); }
-      if (!e.gone && e.k==='conman') { e.st.dist=false; e.st.did=true; }
-      if (w.splash){ f.foes.forEach(function(o){ if(!o.gone && o!==e && Math.abs(o.lane-e.lane)===1 && o.dist<=w.range) dmgFoe(s,o,Math.ceil(dmg/3)); }); }
-    } else f.fx.push({t:'miss',id:e.id});
-    f.first=false;
-  } else if (act==='shove'){
-    if (!e || e.gone || e.dist>1) return false;
-    e.dist=Math.min(5,e.dist+1); e.st.pawed=false; e.st.jaws=false; e.st.rattled=false; e.st.lit=false; e.st.dist=false; e.intent={t:'shoved'}; e.skip=1; dmgFoe(s,e,1); f.fx.push({t:'shove',id:e.id});
-  } else if (act==='brace'){ f.brace=true; f.fx.push({t:'brace'}); }
-  else if (act==='item'){
-    var idx = s.pack.findIndex(function(it){ return it.k===extra; }); if (idx<0) return false; var b=L.ITEMS[extra];
-    if (b.heal){ heal(s,b.heal); f.fx.push({t:'heal',n:b.heal}); }
-    else if (b.fire){ if(!e||e.gone) return false; alive(f).forEach(function(o){ var n = o.k==='swarm'?99:(o===e?b.fire:3); if (o===e||Math.abs(o.lane-e.lane)===1) dmgFoe(s,o,n===99?o.hp:n,'fire'); }); }
-    else if (b.stunall){ alive(f).forEach(function(o){ o.stun=1; o.st.pawed=false; o.st.lit=false; o.st.dist=false; o.st.jaws=false; f.fx.push({t:'stun',id:o.id}); }); }
-    else if (b.bug){ alive(f).forEach(function(o){ if (o.k==='swarm') dmgFoe(s,o,o.hp,'bug'); else if (L.ENEMIES[o.k].kind==='beast' && o.dist<=2) dmgFoe(s,o,2,'bug'); }); }
-    else if (b.scare){ alive(f).forEach(function(o){ o.dist=Math.min(5,o.dist+2); o.st.pawed=false; o.st.jaws=false; o.st.rattled=false; dmgFoe(s,o,2,'fire'); }); }
-    else if (b.repair){ s.van.hp=Math.min(vanMax(s),s.van.hp+b.repair); }
-    else return false;
-    s.pack.splice(idx,1);
-  } else if (act==='talk'){
-    var hum = alive(f).filter(function(o){ return L.ENEMIES[o.k].kind==='human'; }); if (!hum.length || f.talkTried) return false; f.talkTried=true;
-    var ch = 0.38 + (has(s,'trumpet')?0.25:0) + (s.hiker?0.1:0) + (hum.some(function(o){return o.k==='conman';})?0.2:0) - (f.boss?0.2:0);
-    if (rng(s)<ch){ hum.forEach(function(o){ o.gone=true; f.fx.push({t:'leave',id:o.id}); }); s.stats.talks++; say(s, pick(s,['"...You know what, you remind me of my cousin. Go on."','They laugh at your joke about Florida drivers and wave you through.','"A dog THAT cute? Fine. Fine!"']), 'good'); }
-    else { f.angry+=1; say(s,'They did not like your tone. (+1 enemy damage)','warn'); }
-  } else if (act==='toll'){
-    if (!f.toll || s.res.batteries<f.toll) return false; s.res.batteries-=f.toll; alive(f).forEach(function(o){ o.gone=true; }); say(s,'You pay the toll. The Krewe throws you beads. Honestly? Worth it.','good'); f.paid=true; return endFight(s,true);
-  } else if (act==='flee'){
-    if (f.boss) return false;
-    var fc = 0.68 + gearSum(s,'flee') + (s.van.mods.tires>=1?0.05:0) + (s.van.mods.engine>=3?1:0);
-    if (rng(s)<fc){ s.res.fuel=Math.max(0,s.res.fuel-1); if(!has(s,'dino')) s.van.hp-=2; say(s,'You floor it! Marigold rattles away to safety.'+(has(s,'dino')?'':' (-2 Marigold, -1 fuel)'),'warn'); f.over='fled'; s.fight=null; if (s.van.hp<=0){ s.van.hp=1; } toMap(s); return true; }
-    say(s,'Marigold won\'t start! Biscuit barks encouragingly.','warn');
-  } else return false;
-  if (alive(f).length===0) return endFight(s,true);
-  enemyTurn(s);
-  return true;
-}
-L.heroAct = heroAct;
-function dogAct(s, cmd, tid){
-  var f=s.fight; if (!f||f.over||s.dog.hurt>0||s.dog.hp<=0) return false; if (f.dogUsed) return false; if (f.dogCd[cmd]>0) return false;
-  f.fx=[];
-  var e = tid!==undefined&&tid!==null ? f.foes[tid] : null;
-  if (cmd==='bark'){ alive(f).forEach(function(o){ if (L.ENEMIES[o.k].kind==='beast'){ o.dist=Math.min(5,o.dist+1); o.st.pawed=false; o.st.jaws=false; o.st.rattled=false; if (o.intent && ['howl','paw','charge','jaws','roll','rattle','bite','stalk','pounce','rear','maul','tailup','stab'].indexOf(o.intent.t)>=0){ o.intent={t:'shoved'}; o.skip=1; } } else { if (o.st.lit||o.st.pawed){ o.st.lit=false; o.st.pawed=false; o.intent={t:'shoved'}; o.skip=1; } } }); f.dogCd.bark = s.dog.bond>=6?2:3; f.fx.push({t:'bark'}); }
-  else if (cmd==='bite'){ if (!e||e.gone||e.dist>1) return false; dmgFoe(s,e, 2+Math.floor(s.dog.bond/3), 'dog'); f.dogCd.bite=2; f.fx.push({t:'dogbite',id:e.id}); }
-  else if (cmd==='fetch'){ var h = alive(f).filter(function(o){ return L.ENEMIES[o.k].kind==='human'; })[0]; if(!h) return false; var n=ri(s,2,4); s.res.batteries+=n; f.dogCd.fetch=99; f.fx.push({t:'fetch',id:h.id,n:n}); say(s,'Biscuit snatches a pouch off the '+L.ENEMIES[h.k].n.toLowerCase()+'! +'+n+' batteries.','dog'); }
-  else return false;
-  f.dogUsed=true;
-  if (alive(f).length===0) return endFight(s,true);
-  return true;
-}
-L.dogAct = dogAct;
-function hitHero(s, e, n, what){
-  var f=s.fight;
-  var tgtDog = s.dog.hurt===0 && s.dog.hp>0 && rng(s)<0.22 && what!=='throw';
-  if (tgtDog){ var dn=Math.max(1,n - (f.brace?2:0)); s.dog.hp-=dn; f.fx.push({t:'dmgdog',n:dn,id:e.id}); if (s.dog.hp<=0){ s.dog.hp=0; s.dog.hurt = Math.max(1, 3 - s.van.mods.dogbed); if (s.van.mods.dogbed>=3) s.dog.hurt=1; say(s,'Biscuit yelps and limps back to the van. He\'ll be okay, but he needs rest ('+s.dog.hurt+' stops).','warn'); f.fx.push({t:'doghurt'}); } return; }
-  var a = armor(s) + (f.brace?3:0); var dmg = Math.max(1, n - a);
-  if (f.brace && L.ENEMIES[e.k].kind && e.dist<=1 && what==='melee'){ dmgFoe(s,e,2,'counter'); }
-  if (s.hp - dmg <= 0 && s.dog.bond>=8 && !f.saved && s.dog.hurt===0){ f.saved=true; s.hp=1; f.fx.push({t:'goodboy'}); say(s,'Biscuit tackles you out of the way! GOOD BOY!','dog'); return; }
-  s.hp -= dmg; f.fx.push({t:'dmghero',n:dmg,id:e.id});
-}
-function enemyTurn(s){
-  var f=s.fight;
-  alive(f).forEach(function(e){
-    var I=e.intent||{t:'move',n:1}, d=L.ENEMIES[e.k];
-    if (e.skip){ e.skip=0; return; }
-    if (I.t==='stunned'){ e.stun=0; return; }
-    if (I.t==='dazzled') return;
-    switch(I.t){
-      case 'move': case 'submerge': e.dist=Math.max(1, e.dist-(I.n||1)); break;
-      case 'attack': hitHero(s,e,I.dmg,'melee'); break;
-      case 'howl': e.st.howled=true; alive(f).forEach(function(o){ if (o.k==='wolf') o.st.howl=(o.st.howl||0)+1; }); f.fx.push({t:'howl',id:e.id}); break;
-      case 'paw': e.st.pawed=true; break;
-      case 'charge': e.st.pawed=false; e.dist=1; hitHero(s,e,I.dmg,'melee'); break;
-      case 'rattle': e.st.rattled=true; break;
-      case 'bite': e.st.rattled=false; hitHero(s,e,I.dmg,'melee'); s.fight.poison=2; break;
-      case 'jaws': e.st.jaws=true; break;
-      case 'roll': e.st.jaws=false; hitHero(s,e,I.dmg,'melee'); break;
-      case 'sting': hitHero(s,e,I.dmg,'sting'); if (e.dist>1) e.dist--; break;
-      case 'light': e.st.lit=true; break;
-      case 'throw': e.st.lit=false; e.st.threw=true; hitHero(s,e,I.dmg,'throw'); break;
-      case 'stalk': case 'rear': case 'tailup': case 'aim': e.st.pawed=true; break;
-      case 'pounce': e.st.pawed=false; e.dist=1; hitHero(s,e,I.dmg,'melee'); break;
-      case 'maul': e.st.pawed=false; hitHero(s,e,I.dmg,'melee'); break;
-      case 'stab': e.st.pawed=false; hitHero(s,e,I.dmg,'melee'); s.fight.poison=3; break;
-      case 'shoot': e.st.pawed=false; hitHero(s,e,I.dmg,'throw'); break;
-      case 'snack': e.st.ate=true; var fd=Math.min(2,s.res.food); s.res.food-=fd; say(s,'The bear eats '+fd+' of your food, sighs happily, and wanders off for a nap.','warn'); e.gone=true; f.fx.push({t:'leave',id:e.id}); break;
-      case 'scram': say(s,'The coyote yips and scrams. Coward. (Smart coward.)','info'); e.gone=true; f.fx.push({t:'leave',id:e.id}); break;
-      case 'distract': e.st.dist=true; e.st.did=true; break;
-      case 'steal': e.st.dist=false; var loot = s.pack.length ? s.pack.splice(Math.floor(rng(s)*s.pack.length),1)[0] : null; if (loot){ say(s,'Slick Rick swiped your '+iname(loot)+' and vanished! Rude.','warn'); } else { var b=Math.min(3,s.res.batteries); s.res.batteries-=b; say(s,'Slick Rick swiped '+b+' batteries and vanished!','warn'); } e.gone=true; f.fx.push({t:'leave',id:e.id}); break;
-    }
-  });
-  if (f.poison>0 && s.hp>0){ s.hp-=1; f.poison--; f.fx.push({t:'poison'}); }
-  if (s.hp<=0){ f.over='dead'; return endRun(s,'hp'); }
-  if (f.dazzle>0) f.dazzle--;
-  f.turn++; f.dogUsed=false; for (var k in f.dogCd) if (f.dogCd[k]>0 && f.dogCd[k]<99) f.dogCd[k]--;
-  if (alive(f).length===0){ endFight(s,true); return; }
-  alive(f).forEach(function(e){ setIntent(s,e); });
-}
-function endFight(s, won){
-  var f=s.fight; f.over='won';
-  var n = f.foes.length; var bat = ri(s, n, n*2) + (f.boss?4:0);
-  s.res.batteries += bat;
-  var msg='Victory! +'+bat+' batteries.';
-  if (has(s,'flamingo')){ heal(s,3); msg+=' The flamingo approves (+3 HP).'; }
-  if (s.dog.hurt===0 && s.dog.hp>0) bond(s, f.boss?1:(rng(s)<0.35?1:0));
-  s.fight.result = msg;
-  f.lootList = f.reward ? [f.reward] : [];
-  if (has(s,'pelican') && s.dog.hurt===0) f.lootList.push('crate');
-  if (f.svOffer) offerSouvenir(s, randomSouvenirs(s,f.svOffer), 'Spoils of '+(f.name||'battle')+': pick a souvenir');
-  else if (f.node==='danger' && rng(s)<0.25) offerSouvenir(s, randomSouvenirs(s,2), 'Something shiny was in their stash...');
-  return true;
-}
-function afterFight(s){ var f=s.fight; if (!f||f.over!=='won') return; var list=f.lootList, boss=f.boss; s.fight=null;
-  if (list.length){ openLoot(s, list, { tier: tier(s) }); } else toMap(s); }
-L.afterFight = afterFight;
-
-// ---------- region / end ----------
-function regionDone(s){
-  if (s.flags['rdone'+s.region]) return; s.flags['rdone'+s.region]=1;
-  s.flags[['fl','gulf','tx','mojave'][s.region]+'_done']=1;
-  if (s.hiker){ say(s, s.hiker.n+' hops out at the state line. "Best ride ever." They leave you '+s.hiker.gift+'.','good'); if (s.hiker.giftK) { var g=mkItem(s,s.hiker.giftK,2, s.hiker.giftK==='bat'?0:-1); if (s.pack.length<packCap(s)) s.pack.push(g); } s.hiker=null; }
-  if (s.region >= L.REGIONS.length-1){ s.screen='finale'; s.ended={why:'win', t:Date.now()}; s.flags.sunspire=1; return; }
-  s.screen='region'; s.regionCard = { from:s.region, to:s.region+1 };
-}
-function nextRegion(s){ s.region++; genMap(s); s.screen='map'; s.regionCard=null; s.hp=Math.min(hpMax(s), s.hp+14); give(s,'food',2); s.van.hp=Math.min(vanMax(s), s.van.hp+3); give(s,'fuel',2); say(s,'Welcome to '+L.REGIONS[s.region].n+'. '+L.REGIONS[s.region].blurb,'story'); }
-L.nextRegion = nextRegion;
-function endRun(s, why){ s.screen='end'; s.ended = { why:why, t:Date.now() }; return true; }
-L.endRun = endRun;
-function progress(s){ return (s.region*(COLS-1) + s.col) / (L.REGIONS.length*(COLS-1)); }
-L.progress = progress;
-})(typeof LRT!=='undefined'?LRT:(module.exports));
-if (typeof module !== 'undefined' && typeof LRT !== 'undefined') module.exports = LRT;
+// ---------- misc ----------
+C.score = G => ({ day:G.day, tows:G.tows, wonders:G.wondersThisTrip, stars:C.stars(G) });
+C.ensureTapes = G => { if (G.meta.tapes[G.tape]) return; G.tape = 'blue'; };
+if (typeof module !== 'undefined') module.exports = C;
+})(LRT);

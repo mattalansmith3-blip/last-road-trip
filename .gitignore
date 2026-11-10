@@ -1,3 +1,7 @@
+ideas/
+art2/
 art/
 tools/
 __pycache__/
+*.pyc
+node_modules/

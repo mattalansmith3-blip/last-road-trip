@@ -1,216 +1,145 @@
+// Stops and the people at them. Plain, specific, a little strange where the road is.
+var LRT = (typeof LRT !== "undefined") ? LRT : require("./data.js"); if (typeof require !== "undefined" && !LRT.core) require("./core.js");
 (function(L){
-var U=L.util;
-function r(s){ return U.rng(s); }
-function fightNext(foes, extra){ var o={fight:foes, reward:'crate'}; for (var k in extra) o[k]=extra[k]; return o; }
-L.EVENTS = [
- { id:'house', at:['scavenge'], bg:function(s){ return s.region===0?'stop_house':s.region===3?'stop_motel':'stop_cottage'; },
-   text:function(s){ return s.region===2 ? U.pick(s,['A ranch house with a longhorn skull over the door and a porch full of rocking chairs.','A double-wide with a satellite dish the size of a swimming pool.']) : s.region===3 ? U.pick(s,['A roadside motel. Room 6 is unlocked. Room 6 is always unlocked.','A desert homestead with a rock garden and a hundred wind chimes.']) : s.region===0 ? U.pick(s,['A pastel beach house, door wide open. A wind chime plays to nobody.','A stilt house with a hammock still swinging. The fridge door is ajar.','A retirement condo. The welcome mat says something about grandkids.']) : U.pick(s,['A creole cottage with a porch swing and a very judgmental cat.','A fishing shack on stilts. Smells like adventure (and fish).','A tidy shotgun house. Someone left the radio playing static.']); },
-   choices:function(s){ return [
-     { t:'Search the place', go:function(s){ s.stop.searchable=true; return {text:'You step inside. Dusty, quiet, promising.', next:{loot:['crate']}}; } },
-     { t:'Check the garage too (riskier, better)', go:function(s){ s.stop.searchable=true; if (r(s)<0.4) return {text:'The garage door rolls up and something rolls OUT.', next:fightNext([U.pick(s,['boar','snake','swarm'])],{reward:'lockbox'})}; return {text:'A locked toolbox in the garage! And a crate.', next:{loot:['crate','lockbox']}}; } },
-   ]; } },
- { id:'gas', at:['gas'], bg:'stop_gas',
-   text:function(s){ return U.pick(s,['An old filling station wrapped in bougainvillea. The pumps are dry but the underground tanks might not be.','A two-pump station with a vending machine that still hums. Spooky. Delicious.']); },
-   choices:function(s){ return [
-     { t:'Siphon the tanks (+fuel)', go:function(s){ var n=U.ri(s,2,4); L.give(s,'fuel',n); return {text:'Gurgle, gurgle. +'+n+' fuel. Marigold purrs.'}; } },
-     { t:'Raid the snack shop', go:function(s){ return {text:'Chips, jerky, a cooler that has seen things.', next:{loot:['cooler']}}; } },
-     { t:'Do both (takes a while: eats supplies)', go:function(s){ var n=U.ri(s,2,3); L.give(s,'fuel',n); L.linger(s,0.5); if (r(s)<0.32) return {text:'+'+n+' fuel... and then company shows up.', next:fightNext([U.pick(s, [['conman','snake'],['krewe','conman'],['outlaw','conman'],['outlaw','coyote']][s.region])],{reward:'cooler'})}; return {text:'+'+n+' fuel and a cooler. Efficient!', next:{loot:['cooler']}}; } },
-   ]; } },
- { id:'diner', at:['diner'], bg:'stop_diner',
-   text:'A chrome diner with every booth empty. The coffee machine somehow still works. The pie case is... let\'s not.',
-   choices:function(s){ return [
-     { t:'Bottomless coffee (+5 HP)', go:function(s){ L.heal(s,5); return {text:'You sit in a booth and drink three cups. Biscuit naps on the seat across. Bliss.'}; } },
-     { t:'Raid the kitchen', go:function(s){ L.give(s,'food',1); return {text:'+1 food from the pantry, and a walk-in cooler!', next:{loot:['cooler']}}; } },
-     { t:'Play the jukebox and dance with Biscuit', go:function(s){ var g=L.bond(s,1); L.heal(s,2); return {text:'Biscuit does a little spin. You do a bigger one. +bond, +2 HP.'}; } },
-   ]; } },
- { id:'camp', at:['camp'], bg:'stop_camp',
-   text:function(s){ return 'A perfect spot to camp. The fire crackles. Biscuit curls up by your boots.'+(s.hiker?' '+s.hiker.n+' tunes the guitar.':''); },
-   choices:function(s){ var k=s.van.mods.kitchen; var h=[4,7,10,13][k]; return [
-     { t:'Make camp (+'+h+' HP, Biscuit heals, -1 food, takes the night)', go:function(s){ var full = L.hasCombo(s,'beachbum'); L.heal(s, full?99:h + (s.hiker?3:0)); s.dog.hp=L.dogMax(s); if (s.dog.hurt>0) s.dog.hurt=Math.max(0,s.dog.hurt-1); if (s.dog.hurt===0 && s.dog.hp<=0) s.dog.hp=L.dogMax(s); s.res.food=Math.max(0,s.res.food-1); L.linger(s,0.5); L.bond(s,1); if (k>=3) L.heal(s,2); return {text:'You sleep under a sky full of stars. No alarm clock. No commute. Just crickets.'+(full?' (Beach Bum: fully healed!)':'')}; } },
-     { t:'Pet Biscuit, fix Marigold a bit, push on', go:function(s){ L.bond(s,1); s.van.hp=Math.min(L.vanMax(s),s.van.hp+2); return {text:'A quick belly rub and a tightened bolt. +bond, +2 Marigold.'}; } },
-   ]; } },
- { id:'mail', at:['mail'], bg:'stop_camp', who:'npc_mailman',
-   text:function(s){ return '"Neither rain nor gators nor the end of the world," says the Mailman, tipping his cap. "Got something for you, actually."' + (s.flags.gift?'':' He hands you a postcard with a palm tree on it.'); },
-   choices:function(s){ var best = s.pack.filter(function(it){ return L.SLOTS.indexOf(L.ITEMS[it.k].slot)>=0; }).sort(function(a,b){ return L.gearScore(b)-L.gearScore(a); })[0];
-     return [
-     { t:'Take the care package (+2 treats, +2 food)', go:function(s){ L.give(s,'treats',2); L.give(s,'food',2); return {text:'"From a friend down the road." It smells like peanut butter. Biscuit approves.'}; } },
-     { t: best ? 'Mail your '+L.iname(best)+' to your next trip' : 'Mail something to your next trip (pack has no gear)', req:function(s){ return !!best; }, go:function(s){ var i=s.pack.indexOf(best); s.pack.splice(i,1); s.mailed=best; L.give(s,'treats',1); return {text:'"Your future self says thanks." He licks a stamp with great ceremony. (+1 treat)'}; } },
-   ]; } },
- { id:'juicy', at:['attraction'], region:[0], bg:'stop_attraction', once:1,
-   text:'BIG JUICY, the World\'s Happiest Juice Can, grins at the highway. Flamingo lawn ornaments stand guard. The gift shop is open. There is no one in the gift shop.',
-   choices:function(s){ return [
-     { t:'Browse the gift shop (4 batteries)', req:function(s){ return s.res.batteries>=4; }, go:function(s){ s.res.batteries-=4; L.offerSouvenir(s, L.dash.random(s,3), 'Big Juicy Gift Shop'); return {text:'You leave 4 batteries on the counter, because you are a good person.'}; } },
-     { t:'Climb Big Juicy for the view', go:function(s){ s.map.nodes.forEach(function(n){ n.seen=true; }); L.linger(s,0.3); return {text:'From the top you can see for miles. Every mystery stop is revealed.'}; } },
-     { t:'Lick Big Juicy', go:function(s){ if (r(s)<0.5){ L.heal(s,4); return {text:'It tastes like orange creamsicle. How?? +4 HP.'}; } s.hp-=2; return {text:'It tastes like fiberglass. Of course it does. -2 HP. Biscuit is embarrassed for you.'}; } },
-   ]; } },
- { id:'golf', at:['attraction','event'], region:[0], bg:'stop_attraction', once:1,
-   text:'Gator Golf! A mini-golf course with a fiberglass gator on hole 9. One of the "statues" just blinked.',
-   choices:function(s){ return [
-     { t:'Play hole 9 anyway', go:function(s){ if (r(s)<0.5){ L.offerSouvenir(s,L.dash.random(s,2),'Hole in one! Prize counter'); return {text:'HOLE IN ONE. The prize counter is unguarded.'}; } return {text:'Your ball rolls into its mouth. It is not a statue.', next:fightNext(['gator'],{reward:'lockbox'})}; } },
-     { t:'Raid the clubhouse', go:function(s){ return {text:'Free visors, sunscreen, and a crate.', next:{loot:['crate']}}; } },
-   ]; } },
- { id:'casino', at:['attraction','event'], region:[1], bg:'stop_town', once:1,
-   text:'The Lucky Lady riverboat casino is still docked. The slot machines are dark, but a dealer bot made of a mannequin and a car battery still deals blackjack.',
-   choices:function(s){ var p = 0.45 + (L.has(s,'dice')?0.15:0); return [
-     { t:'Bet 3 batteries ('+Math.round(p*100)+'% to win 8)', req:function(s){ return s.res.batteries>=3; }, go:function(s){ s.res.batteries-=3; if (r(s)<p){ s.res.batteries+=8; return {text:'BLACKJACK! The mannequin\'s face does not change. +8 batteries.'}; } return {text:'Bust. The mannequin seems smug somehow.'}; } },
-     { t:'Crack the casino vault', go:function(s){ return {text:'The vault guards were "on break" since the apocalypse. Mostly.', next:fightNext(['krewe','conman'],{reward:'safe'})}; } },
-     { t:'Leave while you\'re ahead', go:function(s){ return {text:'Smart. Biscuit nods.'}; } },
-   ]; } },
- { id:'moth', at:['attraction','event'], region:[1], bg:'stop_town', once:1,
-   text:'MADAME MOTH, PSYCHIC, reads your palm before you even sit down. "You travel west. With a dog. In a green van." She is very good.',
-   choices:function(s){ return [
-     { t:'Pay 2 batteries for a reading', req:function(s){ return s.res.batteries>=2; }, go:function(s){ s.res.batteries-=2; s.map.nodes.forEach(function(n){ n.seen=true; }); L.bond(s,1); return {text:'"I see... a bridge. Beads. A tuba." She also reveals every mystery on your map and tells Biscuit he\'s a good boy.'}; } },
-     { t:'Ask about Sunspire', go:function(s){ L.heal(s,2); return {text:'"The lights are real, child. Someone is waiting. Bring snacks." (+2 HP, from hope)'}; } },
-   ]; } },
- { id:'velvet', at:['event','attraction'], once:1, who:'npc_velvet',
-   text:function(s){ return '"OMG, a DOG? Hi besties, it\'s Chez Velvet, live from the end of the world!" A gold limo idles behind her. She\'s also racing to Sunspire. Of course she is.'; },
-   choices:function(s){ return [
-     { t:'Do a collab with her', go:function(s){ var it=L.mkItem(s, U.pick(s,['leather','helmet','boots','crossbow']), 2, -1); if (s.pack.length<L.packCap(s)) s.pack.push(it); s.flags.velvet='collab'; return {text:'You film a "day in my life." Biscuit gets 0 views because there is no internet. She tips you a '+L.iname(it)+'.'}; } },
-     { t:'Steal parts off her limo', go:function(s){ L.give(s,'parts',4); s.flags.velvet='rival'; return {text:'+4 parts. She\'ll notice. She\'ll post about it. To nobody.'}; } },
-     { t:'Wave and drive on', go:function(s){ return {text:'"Like and subscribe!" she yells after you.'}; } },
-   ]; } },
- { id:'juniper', at:['event','diner','gas'], once:1, cond:function(s){ return !s.hiker; }, who:'npc_hiker',
-   text:'A kid with a guitar sticks out a thumb. "I\'m Juniper. Going west? I play a mean song and eat only a little."',
-   choices:function(s){ return [
-     { t:'Give Juniper a ride (+1 dmg, camps heal more, eats 1 more food)', go:function(s){ s.hiker={k:'juniper',n:'Juniper',gift:'a rare piece of gear',giftK:U.pick(s,['boots','leather','gloves','bat'])}; return {text:'Juniper climbs in and immediately plays a song about Biscuit. It slaps.'}; } },
-     { t:'Share a snack and wish them luck', go:function(s){ s.res.food=Math.max(0,s.res.food-1); L.bond(s,1); return {text:'"You\'re good people." Biscuit gets an ear scratch. +bond'}; } },
-   ]; } },
- { id:'lostdog', at:['event','scavenge'], once:1, bg:function(s){ return s.region===0?'stop_house':'stop_cottage'; },
-   text:'A faded poster: LOST - PANCAKE - FLUFFY - ANSWERS TO "PANCAKE." Biscuit is sniffing the ground very seriously.',
-   choices:function(s){ return [
-     { t:'Let Biscuit follow the scent', req:function(s){ return s.dog.hurt===0; }, go:function(s){ L.give(s,'treats',3); L.bond(s,2); return {text:'Ten minutes later: a fluffy poodle and an old man on a porch, crying happy tears. He gives you 3 treats. Biscuit is a hero.'}; } },
-     { t:'Search the house the poster is on', go:function(s){ return {text:'No Pancake, but there\'s a crate.', next:{loot:['crate']}}; } },
-   ]; } },
- { id:'shuffle', at:['event','camp'], region:[0], once:1,
-   text:'The Sunset Palms Shuffleboard Club is still in session. The retirees are tan, armed with cue sticks, and VERY competitive.',
-   choices:function(s){ return [
-     { t:'Challenge them (2 batteries stake)', req:function(s){ return s.res.batteries>=2; }, go:function(s){ if (r(s)<0.5){ s.res.batteries+=5; return {text:'You win! Gladys pays up, grumbling. +5 batteries.'}; } s.res.batteries-=2; return {text:'Destroyed by an 84-year-old named Gladys. -2 batteries.'}; } },
-     { t:'Trade with them', go:function(s){ return {text:'"Let\'s see what you\'ve got, sweetie."', next:{trader:'club'}}; } },
-   ]; } },
- { id:'flamingos', at:['event'], region:[0],
-   text:'Flamingo traffic jam. Two hundred pink birds are standing on the highway, being fabulous.',
-   choices:function(s){ return [
-     { t:'Wait it out (+2 HP, eats supplies)', go:function(s){ L.linger(s,0.5); L.heal(s,2); return {text:'You put your feet on the dash and enjoy the show.'}; } },
-     { t:'Let Biscuit herd them', go:function(s){ if (s.dog.bond>=3){ L.bond(s,1); return {text:'Biscuit gently moves them aside like a pink-feathered professional. +bond'}; } s.res.food=Math.max(0,s.res.food-1); return {text:'Biscuit gets chased by the flamingos. They also eat your sandwich. -1 food.'}; } },
-     { t:'Honk', go:function(s){ if (r(s)<0.4) return {text:'They scatter... revealing a very annoyed gator.', next:fightNext(['gator'],{})}; return {text:'They scatter in a pink explosion. Gorgeous.'}; } },
-   ]; } },
- { id:'marsh', at:['event'],
-   text:'The road dips through a marsh. You hear it before you see it: a buzzing cloud the size of a house.',
-   choices:function(s){ return [
-     { t:'Floor it through (-2 Marigold)', go:function(s){ s.van.hp-=2; if (s.van.hp<1) s.van.hp=1; return {text:'Windows up! SPLAT SPLAT SPLAT. Gross but effective.'}; } },
-     { t:'Use bug spray', req:function(s){ return L.countUse(s,'bugspray')>0; }, go:function(s){ var i=s.pack.findIndex(function(it){return it.k==='bugspray';}); s.pack.splice(i,1); return {text:'PSSSHHT. The swarm drops like a bad habit. Behind it: a crate on a dock!', next:{loot:['crate']}}; } },
-     { t:'Fight it for the dock crates', go:function(s){ return {text:'Swatting time.', next:fightNext(['swarm','swarm'],{reward:'crate'})}; } },
-   ]; } },
- { id:'crawfish', at:['event','camp'], region:[1], once:1,
-   text:'A big man in rubber boots is stirring a giant pot of crawfish. "Y\'all hungry? Bring something to the pot, cher."',
-   choices:function(s){ return [
-     { t:'Share 2 food with him', req:function(s){ return s.res.food>=2; }, go:function(s){ s.res.food-=2; L.heal(s,6); var it=L.rollItem(s,1,1,'gear'); if (s.pack.length<L.packCap(s)) s.pack.push(it); return {text:'Best meal since the end of the world. +6 HP. He insists you take his old '+L.iname(it)+'.'}; } },
-     { t:'Just eat and run (+3 HP)', go:function(s){ L.heal(s,3); L.give(s,'food',1); return {text:'Spicy. Delicious. +1 food for the road.'}; } },
-   ]; } },
- { id:'shellgame', at:['event'], who:'en_conman',
-   text:'"Step right up!" A man in a purple suit shuffles three bottle... no, three hubcaps. "Find the battery, win the pot!"',
-   choices:function(s){ return [
-     { t:'Play (3 batteries)', req:function(s){ return s.res.batteries>=3; }, go:function(s){ s.res.batteries-=3; if (r(s)<0.4 + (s.dog.hurt===0?0.15:0)){ s.res.batteries+=8; return {text:'Biscuit sniffs the right one. +8 batteries. Slick Rick looks betrayed.'}; } return {text:'Empty. All three were empty. Of course they were.'}; } },
-     { t:'Call his bluff', go:function(s){ return {text:'"Rude!" He pulls out a cane sword. Seriously?', next:fightNext(['conman'],{reward:'lockbox'})}; } },
-     { t:'Keep walking', go:function(s){ return {text:'"Your loss!" It is not.'}; } },
-   ]; } },
- { id:'bus', at:['event','scavenge'],
-   text:'A tour bus on its side, covered in ivy. "SUNSPIRE OR BUST" is painted on the windows. Someone else had the same idea.',
-   choices:function(s){ return [
-     { t:'Search the luggage', go:function(s){ if (r(s)<0.25) return {text:'Something buzzes in the luggage hold...', next:fightNext(['swarm'],{reward:'crate'})}; return {text:'Suitcases, coolers, souvenirs!', next:{loot:['crate','cooler']}}; } },
-     { t:'Leave a note on the windshield', go:function(s){ L.heal(s,1); return {text:'"Made it this far. You can too." You feel lighter. +1 HP'}; } },
-   ]; } },
- { id:'roadgator', at:['event'], region:[0],
-   text:'A gator is sunbathing across BOTH lanes. It is not in a hurry. It has never been in a hurry.',
-   choices:function(s){ return [
-     { t:'Wait (eats supplies)', go:function(s){ L.linger(s,0.6); return {text:'Forty minutes later, it waddles off. You learned patience.'}; } },
-     { t:'Biscuit, bark!', req:function(s){ return s.dog.hurt===0; }, go:function(s){ if (s.dog.bond>=2 || r(s)<0.5){ L.bond(s,1); return {text:'WOOF. The gator sighs and slides into the canal. Good boy!'}; } return {text:'The gator does not respect Biscuit. It charges!', next:fightNext(['gator'],{})}; } },
-     { t:'Honk aggressively', go:function(s){ return {text:'It wakes up angry.', next:fightNext(['gator'],{reward:'crate'})}; } },
-   ]; } },
- { id:'shelter', at:['event','scavenge'],
-   text:'A hurricane shelter, door bolted from outside. Spray-painted: "STASH. TAKE WHAT U NEED. LEAVE SOME FOR THE NEXT ONE."',
-   choices:function(s){ return [
-     { t:'Open it up', go:function(s){ return {text:'Inside: a lockbox and a stack of comic books.', next:{loot:['lockbox']}}; } },
-     { t:'Leave supplies for the next one (-1 food, +2 HP)', req:function(s){ return s.res.food>=1; }, go:function(s){ s.res.food--; L.heal(s,2); L.bond(s,1); return {text:'You leave a can of beans and a drawing of Biscuit. Good karma +1.'}; } },
-   ]; } },
- // ---------- Texas ----------
- { id:'rosa', at:['event','attraction','camp'], region:[2], once:1, who:'npc_rosa', bg:'stop_town',
-   text:'"Well butter my biscuit - is that a BISCUIT?" Grandma Rosa, retired rodeo champion, lassos your side mirror to make you stop. "Nobody drives through my town without supper."',
-   choices:function(s){ return [
-     { t:'Stay for supper (+6 HP, +3 food)', go:function(s){ L.heal(s,6); L.give(s,'food',3); L.bond(s,1); return {text:'Brisket, beans and a pie the size of a hubcap. Biscuit gets the bone. Rosa tells you the rodeo clowns are "mostly harmless. Except Kevin."'}; } },
-     { t:'Ask her to teach you the lasso (+1 gear)', go:function(s){ var it=L.mkItem(s, U.pick(s,['gloves','boots','leather']), 2, -1); if (s.pack.length<L.packCap(s)) s.pack.push(it); s.flags.rosa=1; return {text:'You catch a fence post on try nine. Rosa hollers like you won state. She gives you her old '+L.iname(it)+'.'}; } },
-     { t:'Trade with her (her shop is in the barn)', go:function(s){ return {text:'"Batteries only, sugar."', next:{trader:'dot'}}; } },
-   ]; } },
- { id:'boot', at:['attraction','event'], region:[2], once:1, bg:'stop_attraction',
-   text:'THE WORLD\'S LARGEST COWBOY BOOT, forty feet tall, spur and all. There is a door in the heel. There is a gift shop in the toe.',
-   choices:function(s){ return [
-     { t:'Raid the gift shop', go:function(s){ return {text:'Bolo ties, snow globes, a suspicious amount of jerky.', next:{loot:['crate','cooler']}}; } },
-     { t:'Climb to the top of the boot', go:function(s){ s.map.nodes.forEach(function(n){ n.seen=true; }); L.linger(s,0.3); return {text:'From the cuff you see the whole map. And the rodeo arena. And a bear in a hat. Every stop revealed.'}; } },
-     { t:'Take a photo with Biscuit in the boot', go:function(s){ L.bond(s,2); return {text:'He looks like the world\'s smallest cowboy. +2 bond.'}; } },
-   ]; } },
- { id:'trucker', at:['event','gas','diner'], region:[2,3], once:1, who:'npc_trucker',
-   text:'"Breaker breaker, little green van." A trucker named Big Wendell is idling at the pumps with a full tanker. "Been talking to nobody but the CB for a year. You got stories?"',
-   choices:function(s){ return [
-     { t:'Swap road stories (+4 fuel)', go:function(s){ L.give(s,'fuel',4); return {text:'You tell him about Big Al. He laughs so hard he honks the horn. He tops you off. +4 fuel.'}; } },
-     { t:'Ask for a tow and tune-up (+5 Marigold)', go:function(s){ s.van.hp=Math.min(L.vanMax(s), s.van.hp+5); return {text:'He tightens everything that rattles and a few things that didn\'t. Marigold purrs. +5'}; } },
-     { t:'Trade CB frequencies (reveal the map)', go:function(s){ s.map.nodes.forEach(function(n){ n.seen=true; }); return {text:'"Channel 19 knows everything." Every mystery on the map is revealed.'}; } },
-   ]; } },
- { id:'tumble', at:['event'], region:[2],
-   text:'A tumbleweed the size of a hatchback rolls across the road. Then another. Then about forty.',
-   choices:function(s){ return [
-     { t:'Floor it through (-2 Marigold)', go:function(s){ s.van.hp-=2; return {text:'Thwump. Thwump. Thwumpthwumpthwump. Marigold has tumbleweed in her grille for the rest of the trip.'}; } },
-     { t:'Wait for the stampede to pass (eats supplies)', go:function(s){ L.linger(s,0.6); L.heal(s,2); return {text:'You watch the parade. It\'s honestly beautiful. +2 HP'}; } },
-     { t:'Biscuit, fetch one!', req:function(s){ return s.dog.hurt===0; }, go:function(s){ L.bond(s,1); if (r(s)<0.5){ L.give(s,'parts',2); return {text:'He drags back a tumbleweed with a whole hubcap tangled in it. +2 parts!'}; } return {text:'He comes back covered in burrs, very proud. +bond'}; } },
-   ]; } },
- { id:'cattle', at:['event'], region:[2],
-   text:'Longhorns. On the road. Several hundred of them. One is looking directly at Marigold\'s mint paint job like it wants a lick.',
-   choices:function(s){ return [
-     { t:'Let Biscuit herd them', req:function(s){ return s.dog.hurt===0; }, go:function(s){ if (s.dog.bond>=3 || r(s)<0.5){ L.bond(s,1); L.give(s,'food',1); return {text:'Born for this. Retrievers can herd, it turns out, if they believe. A grateful ranch cat gives you a sandwich. +1 food'}; } return {text:'A bull disagrees with Biscuit\'s leadership.', next:fightNext(['boar'],{reward:'crate'})}; } },
-     { t:'Take the back road (+1 fuel)', go:function(s){ s.res.fuel=Math.max(0,s.res.fuel-1); return {text:'A scenic detour past a dinosaur track. Worth it.'}; } },
-   ]; } },
- { id:'rodeo', at:['attraction','danger'], region:[2], once:1, bg:'stop_town',
-   text:'The empty rodeo grounds. A mechanical bull still blinks "READY" on a battery. A trophy case glitters in the office.',
-   choices:function(s){ return [
-     { t:'Ride the mechanical bull (risky, prize)', go:function(s){ if (r(s)<0.55){ L.give(s,'batteries',6); return {text:'EIGHT SECONDS. You are a legend in a town of zero. +6 batteries from the prize jar.'}; } s.hp-=3; return {text:'It throws you into the hay bales. -3 HP, +1 dignity lesson.'}; } },
-     { t:'Break into the trophy case', go:function(s){ return {text:'The rodeo clowns left a guard.', next:fightNext(['outlaw'],{reward:'safe'})}; } },
-   ]; } },
- // ---------- Route 66 / Mojave ----------
- { id:'neon', at:['attraction','event'], region:[3], once:1, bg:'stop_motel',
-   text:'The Starlite Motel. Half the neon still buzzes. The pool is empty except for a very relaxed tortoise.',
-   choices:function(s){ var h=[6,9,12,15][s.van.mods.kitchen]; return [
-     { t:'Sleep in a real bed (+'+h+' HP, eats supplies)', go:function(s){ L.heal(s,h); L.linger(s,0.6); L.bond(s,1); return {text:'Clean sheets. A TV that only shows snow. Biscuit hogs the pillow. Perfect.'}; } },
-     { t:'Search the rooms', go:function(s){ return {text:'Room 6 is unlocked. Room 6 is always unlocked.', next:{loot:['crate','lockbox']}}; } },
-     { t:'Turn the sign all the way on', go:function(s){ L.give(s,'batteries',-Math.min(2,s.res.batteries)); L.heal(s,3); return {text:'You spend 2 batteries and the whole sign blazes pink and gold. You sit on the roof and feel like the last person in a postcard. +3 HP'}; } },
-   ]; } },
- { id:'dinos', at:['attraction','event'], region:[3], once:1, bg:'stop_attraction',
-   text:'Two concrete dinosaurs stand by the highway: Rex and Dottie. Someone has put sunglasses on Dottie. There\'s a gift shop in Rex\'s belly.',
-   choices:function(s){ return [
-     { t:'Shop inside the T-Rex', go:function(s){ return {text:'Plastic dinos, rock candy, and a crate behind the register.', next:{loot:['crate','cooler']}}; } },
-     { t:'Picnic in Dottie\'s shade (+4 HP, -1 food)', go:function(s){ s.res.food=Math.max(0,s.res.food-1); L.heal(s,4); L.bond(s,1); return {text:'Biscuit barks at Rex for ten minutes. Rex does not bark back. Biscuit wins.'}; } },
-   ]; } },
- { id:'crater', at:['event'], region:[3], once:1,
-   text:'A meteor crater. A tour sign says "ASK ABOUT THE ROCK." There\'s nobody to ask. There is, however, the rock, and it\'s glowing a little.',
-   choices:function(s){ return [
-     { t:'Chip off a piece (sell it later)', go:function(s){ L.give(s,'batteries',5); return {text:'It hums. You decide not to think about it. +5 batteries worth of space rock.'}; } },
-     { t:'Climb down to the lost-and-found', go:function(s){ if (r(s)<0.45) return {text:'Something lives down here. Something with a tail.', next:fightNext(['scorpion'],{reward:'lockbox'})}; return {text:'A tourist\'s backpack!', next:{loot:['lockbox']}}; } },
-   ]; } },
- { id:'mirage', at:['event'], region:[3],
-   text:'Shimmering on the horizon: a gas station with a FULL water tower. Or a mirage. Biscuit\'s tail is wagging. Biscuit has been wrong before.',
-   choices:function(s){ return [
-     { t:'Trust Biscuit', go:function(s){ if (r(s)<0.5+0.05*s.dog.bond){ L.give(s,'fuel',3); L.give(s,'food',1); L.bond(s,1); return {text:'It\'s REAL. +3 fuel, +1 food. Biscuit is insufferable about it.'}; } s.res.fuel=Math.max(0,s.res.fuel-1); return {text:'It was a mirage. You burned 1 fuel finding out. Biscuit pretends he never saw it.'}; } },
-     { t:'Stay on the road', go:function(s){ return {text:'Responsible. Boring. Probably right.'}; } },
-   ]; } },
- { id:'sandstorm', at:['event'], region:[3],
-   text:'A wall of sand is rolling in from the south. Sunset turns orange, then brown, then everything.',
-   choices:function(s){ return [
-     { t:'Hunker down (eats supplies, safe)', go:function(s){ L.linger(s,1); return {text:'You and Biscuit play cards in the back. He cheats.'}; } },
-     { t:'Drive blind (-3 Marigold, +1 fuel saved)', go:function(s){ s.van.hp-=3; L.give(s,'fuel',1); return {text:'Marigold comes out sandblasted to a fresh new shine. Kind of.'}; } },
-   ]; } },
- { id:'windmill', at:['event','camp'], region:[3], once:1,
-   text:'The wind farm on the pass is still turning. A maintenance shed hums with stored power. The ocean is on the other side of this mountain.',
-   choices:function(s){ return [
-     { t:'Charge up (+6 batteries)', go:function(s){ L.give(s,'batteries',6); return {text:'Every battery you own goes full. The turbines whoosh like applause.'}; } },
-     { t:'Use the workshop (+4 Marigold, +2 parts)', go:function(s){ s.van.hp=Math.min(L.vanMax(s), s.van.hp+4); L.give(s,'parts',2); return {text:'A real workshop. You give Marigold a spa day.'}; } },
-   ]; } },
+const C = L.core;
+// opt: { t:label, cost:{res:n}, need:{gadget|gift|pass|souv|tag:...}, fx:{...}, r:result text, p:chance, fail:{fx, r} }
+const E = [
+ // ----- Florida -----
+ { id:'mara', story:1, reg:0, node:0, who:'mara', t:'Mara\'s Landing',
+   p:['Mara is hosing down the deck of a shrimp boat when you pull up. She looks at the van, then at the dog, then at the sky, and decides you are going to need things.',
+      '"There is a coffee can in my shed with spare parts in it," she says. "Take it. The rack in the corner will fit your roof if you have the tools. Everything on this road wears out, honey. It helps to know how to fix it."'],
+   o:[ { t:'Ask her about the road west', fx:{ parts:4, map:1, scrap:'n_mara' }, r:'She draws it on the back of a receipt: gas here, a cafe there, a drive-in worth the detour. You take the can of parts and she takes your dog\'s head in both hands.' },
+       { t:'Take the can and a plate of shrimp', fx:{ parts:4, food:2, spirit:1, scrap:'n_mara' }, r:'The shrimp are peeled and still warm. You eat on the dock, then she walks you back to the van.' } ] },
+ { id:'dot', story:1, reg:0, node:2, who:'dot', t:'Coral Cafe',
+   p:['Dot runs the cafe alone and has opinions about all of it. A grey parrot named Ziggy sits on the pie case and says "Order up" at no one in particular.',
+      '"Sit anywhere," she says. "I mean anywhere."'],
+   o:[ { t:'Order the lunch plate', cost:{ batt:1 }, fx:{ food:2, spirit:1, scrap:'n_dot' }, r:'Fried fish, black beans, rice. It is the first sit-down meal in a long time. Dot refills your coffee without asking.' },
+       { t:'Help her with the dish pile (1 hour)', fx:{ hours:1, gift:'hot', scrap:'n_dot' }, r:'An hour of hot water and chipped plates. She pays you in a bottle of her own hot sauce, and tells you about a lighthouse down a road that is not on any map.' },
+       { t:'Ask about the lighthouse', fx:{ hint:1, scrap:'n_dot' }, r:'"Turn off at the shell pile after the drive-in," she says. "You will know it." Ziggy says "Order up" and she says "Not you."' } ] },
+ { id:'pelican', story:1, reg:0, node:3, who:null, img:['friends',0], t:'Mangrove Camp',
+   p:['A pelican is standing on your picnic table. It is not leaving, and it is not asking, exactly. It is looking at the cooler.'],
+   o:[ { t:'Share a can of sardines', cost:{ food:1 }, fx:{ pass:'pelican', spirit:1 }, r:'It eats three, thanks you with its whole body, and rides along on the roof until the next bridge. It seems to know where the cheap gas is.' },
+       { t:'Let it be', fx:{ spirit:1 }, r:'You sit with it for a bit. Eventually it leaves, and the evening feels a little bigger.' } ] },
+ { id:'stilt', story:1, reg:0, node:6, who:null, img:['uiicons',8], t:'The Stilt House',
+   p:['Someone left this house tidy. The windows are shut, the chairs are pushed in, and there is a letter weighted down with a conch shell on the table.',
+      'It reads: "To whoever needs it. The toolbox is under the stairs. The mangoes are on the counter. Leave the door unlatched. - E."'],
+   o:[ { t:'Take the toolbox', fx:{ bp:'toolbox', parts:2, scrap:'n_stilt' }, r:'It is a good toolbox, dented and organized. You take the sketches inside too, they show how it mounts on the back of the van.' },
+       { t:'Take the mangoes and the shell', fx:{ food:2, souv:'conch', spirit:1 }, r:'You eat one on the porch. The shell goes on the dashboard.' } ] },
+ { id:'ray0', story:1, reg:0, node:9, who:'ray', t:'Harbor Market',
+   p:['A folding table under a tarp. Rolled charts, hand-copied atlases, a jar of loose tags that say things like "creek" and "probably fine."',
+      '"Ray Pruitt," says the man behind it. "I sell what other people were too busy to notice."'],
+   o:[ { t:'Haggle with him', haggle:'ray', r:'' }, { t:'Just look at what he has', shop:1, r:'' } ] },
+ // ----- Gulf -----
+ { id:'odile', story:1, reg:1, node:0, who:'odile', t:'Bayou Landing',
+   p:['A brass band is rehearsing on a loading dock with the doors pulled up. Odile conducts with a wooden spoon.',
+      '"Sit," she says. "We are in the middle of the second verse. You can help by being an audience."'],
+   o:[ { t:'Sit in for a song (1 hour)', fx:{ hours:1, spirit:2, tape:'brass', scrap:'n_odile' }, r:'The tuba comes in last and the whole building shakes. When they finish, she hands you a cassette with SUNDAY BRASS written on it in marker.' },
+       { t:'Offer them something sweet', need:{ tag:'sweet' }, fx:{ spirit:2, batt:3, tape:'brass', scrap:'n_odile' }, r:'They pass the jar down the line. Odile gives you the cassette and three batteries and a long look that means thank you.' } ] },
+ { id:'juniper', story:1, reg:1, node:2, who:'juniper', t:'Dockside Diner',
+   p:['Juniper is hitchhiking with a cardboard sign that just says WEST. She has a tent bag, a thermos and the manner of someone who has been waiting politely for a while.',
+      '"I am headed to the Toll Bridge," she says. "I do not need much."'],
+   o:[ { t:'Buy her a coffee', cost:{ batt:1 }, fx:{ hint:1, spirit:1, scrap:'n_juniper' }, r:'She talks about the old mill on the creek, where the road bends where it should not. You write it on the atlas.' },
+       { t:'Give her a lift to the next stop (1 hour)', fx:{ hours:1, map:1, scrap:'n_juniper' }, r:'She sleeps for most of it. When she wakes, she hands you a map she drew herself, with every stop labeled.' } ] },
+ { id:'raccoon', story:1, reg:1, node:3, who:null, img:['friends',1], t:'Cypress Camp',
+   p:['Something is in the cooler. It has been in the cooler for a while. When you open the lid, a raccoon looks up at you with a cracker in each hand.'],
+   o:[ { t:'Let it keep the crackers', cost:{ food:1 }, fx:{ pass:'raccoon', spirit:1 }, r:'It considers this a binding agreement. It spends the rest of the evening on the dash, testing latches.' },
+       { t:'Close the lid gently', fx:{ spirit:1 }, r:'It watches you do it, a little hurt. You leave the lid open a crack.' } ] },
+ { id:'walt', story:1, reg:1, node:6, who:'walt', t:'Crawfish Shack',
+   p:['Walt has been delivering mail to places that have no one living in them for about ten years. "Someone might come back," he says. "And then there is a letter waiting."',
+      'He has one for the keeper of the Toll Bridge, and a bad knee.'],
+   o:[ { t:'Carry the parcel to the bridge', fx:{ batt:3, gift:'*', tape:'slow', scrap:'n_walt' }, r:'He pays you up front, and gives you a tape from the bottom of his bag. SLOW RADIO, it says. "For the long straight parts."' },
+       { t:'Ask him about the roads', fx:{ map:1, spirit:1, scrap:'n_walt' }, r:'Walt knows every shortcut and every road that floods. You leave with a lot of his knowledge in your head.' } ] },
+ { id:'wendell1', story:1, reg:1, node:1, who:'wendell', t:'Pump & Pantry',
+   p:['A flatbed truck is pulled off with its hazards blinking. Wendell is looking at a flat tire the way you look at a bill.',
+      '"I have the spare," he says. "I do not have the shoulders. Two hands would help."'],
+   o:[ { t:'Help him change it (2 hours)', fx:{ hours:2, bp:'bullbar', scrap:'n_wendell' }, r:'It takes the two of you and a good jack. "Take this," he says, and gives you a drawing of the bar on the front of his truck. "Bolts on."' },
+       { t:'Offer him a thermos of coffee', need:{ tag:'warm' }, fx:{ bp:'bullbar', spirit:1, scrap:'n_wendell' }, r:'He drinks it standing next to the truck, looks at the tire, and decides it can wait. He shows you the bull bar plans anyway.' } ] },
+ // ----- Texas -----
+ { id:'rosa', story:1, reg:2, node:0, who:'rosa', t:'Prairie Junction',
+   p:['Rosa has a ranch outside town and a fence that keeps falling over in the same place. She is holding a post-hole digger when you arrive.',
+      '"You look like you can hold a post," she says.'],
+   o:[ { t:'Help her with the fence (1 hour)', fx:{ hours:1, tape:'wide', gift:'cheese', spirit:1, scrap:'n_rosa' }, r:'It takes an hour and a little arguing. She gives you a cassette called WIDE OPEN and a wheel of cheese for the road.' },
+       { t:'Ask about the road ahead', fx:{ map:1, scrap:'n_rosa' }, r:'"The wind is worst in the afternoon," she says. "Do your long drives in the morning." She is right.' } ] },
+ { id:'wendell2', story:1, reg:2, node:2, who:'wendell', t:'Windmill Cafe',
+   p:['Wendell is at the counter again, with a slice of pie the size of a hubcap. He nods at you as if he has been expecting you.',
+      '"Got a winch in the cab I never use," he says. "It is yours if you can listen to me talk about my truck for an hour."'],
+   o:[ { t:'Listen for an hour', fx:{ hours:1, bp:'winch', spirit:1 }, r:'He talks about the truck. Then about the road. Then, a little, about his wife. By the end you have the plans for the winch and some of his pie.' },
+       { t:'Pay for his pie', cost:{ batt:2 }, fx:{ bp:'winch', spirit:1 }, r:'"That is not necessary," he says, and finishes the pie. You leave with the winch plans.' } ] },
+ { id:'armadillo', story:1, reg:2, node:3, who:null, img:['friends',2], t:'Tank Camp',
+   p:['In the cold light before dawn, an armadillo is walking circles around your tires. It stops, looks at you, and keeps going.'],
+   o:[ { t:'Share your breakfast', cost:{ food:1 }, fx:{ pass:'armadillo', spirit:1 }, r:'It eats most of a biscuit. It climbs onto the passenger seat and goes to sleep immediately.' },
+       { t:'Watch it go', fx:{ spirit:1 }, r:'It trundles off into the grass. The morning is quiet.' } ] },
+ { id:'barncat', story:1, reg:2, node:6, who:null, img:['friends',4], t:'Rosa\'s Barn Road',
+   p:['A barn at the end of a long gravel drive. A grey cat is sitting on a hay bale, and looks at you like a customer.'],
+   o:[ { t:'Leave a bowl of water and some food', cost:{ food:1 }, fx:{ pass:'cat', spirit:1 }, r:'The cat inspects the bowl and then the van. It chooses the passenger seat.' },
+       { t:'Look around the barn', fx:{ gift:'*', spirit:0 }, r:'Hay, harness, a dented kettle. Nothing that is yours, but you find something someone wants you to have.' } ] },
+ // ----- Mojave -----
+ { id:'dee', story:1, reg:3, node:0, who:'dee', t:'Amboy Junction',
+   p:['Dee paints signs for businesses that closed years ago. "Somebody has to," she says. She has a tall ladder and a very small brush.',
+      '"I have never painted a van door," she says. "Is that something you would like?"'],
+   o:[ { t:'Let her paint the door', fx:{ spirit:2, bp:'tank', gift:'flowers', scrap:'n_dee' }, r:'She paints the name of the van in careful cream letters. When she finishes, she wipes her hands and gives you a drawing of the big tank she has been meaning to build.' },
+       { t:'Ask about the Sign Boneyard', fx:{ map:1, scrap:'n_dee' }, r:'"Walk through the letters," she says. "They are all in order, mostly."' } ] },
+ { id:'crow', story:1, reg:3, node:2, who:null, img:['friends',3], t:'Starlight Motel',
+   p:['The pool is dry and a crow is standing on the diving board. It has a bottle cap and looks like it wants to trade.'],
+   o:[ { t:'Leave out some peanuts', cost:{ food:1 }, fx:{ pass:'crow', spirit:1 }, r:'It takes them, puts the bottle cap on your dash, and settles in the back window. Later it will show you where the roads go.' },
+       { t:'Swim in the empty pool (1 hour)', fx:{ hours:1, spirit:2 }, r:'It is a dry and sunny pool. You lie on the bottom and look up. It is the quietest hour of the trip.' } ] },
+ { id:'rabbit', story:1, reg:3, node:3, who:null, img:['friends',5], t:'Joshua Camp',
+   p:['A jackrabbit is sitting twenty feet from the fire, absolutely still, ears up. It has decided you are safe enough to watch.'],
+   o:[ { t:'Sit still and let it come closer (1 hour)', fx:{ hours:1, pass:'rabbit', spirit:1 }, r:'It takes a long time. When it finally hops over, it sits at your feet. In the morning it is in the back seat.' },
+       { t:'Offer it lettuce', cost:{ food:1 }, fx:{ pass:'rabbit', spirit:1 }, r:'Faster. It eats and decides you are acceptable.' } ] },
+ { id:'adobe', story:1, reg:3, node:6, who:null, img:['uiicons',7], t:'Adobe House',
+   p:['A small adobe house at the end of a track. A brass key is hanging on a nail by the door, next to a note that says "In case."'],
+   o:[ { t:'Take the key', fx:{ souv:'key', spirit:1 }, r:'You do not know what it opens. It feels right to have it.' },
+       { t:'Check the pantry', fx:{ food:3, batt:1 }, r:'Jars of beans, a bag of rice, a few batteries in a drawer.' } ] },
+ // ----- fillers by place -----
+ { id:'f_town1', reg:null, at:['town', 'trader'], who:null, img:['uiicons',10], t:'Notice Board',
+   p:['A cork board by the door. Hand-lettered cards: a ride wanted, a ride offered, a lost cat who is probably fine, a barn dance that already happened.'],
+   o:[ { t:'Take a job (1 hour)', fx:{ hours:1, batt:2 }, r:'Someone needs a ladder held. You hold it.' }, { t:'Read the notices', fx:{ spirit:1 }, r:'A card in small writing says "Thank you to whoever fixed the porch light." Nobody signed it.' } ] },
+ { id:'f_stop1', reg:null, at:['stop'], who:null, img:['uiicons',4], t:'A Slow Hour',
+   p:['No one is in a hurry. The radio is on low. The coffee is hot, and you have somewhere to be but not for a while yet.'],
+   o:[ { t:'Sit a while (1 hour)', fx:{ hours:1, spirit:2 }, r:'You watch the road through the window. Biscuit sleeps under the table.' }, { t:'Buy a hot meal', cost:{ batt:1 }, fx:{ food:2, spirit:1 }, r:'Eggs, toast, potatoes. It tastes like a normal morning.' } ] },
+ { id:'f_stop2', reg:null, at:['stop', 'gas'], who:null, img:['uiicons',9], t:'Left on the Counter',
+   p:['There is a paper bag on the counter with your van\'s color written on it. Nobody is around. Inside: a sandwich, a battery, a note that says "For the next one through."'],
+   o:[ { t:'Take it, and leave something', cost:{ food:0 }, fx:{ food:1, batt:1, spirit:1 }, r:'You write a note of your own and tuck it under the register.' } ] },
+ { id:'f_camp1', reg:null, at:['camp'], who:null, img:['uiicons',1], t:'Quiet Fire',
+   p:['A fire ring someone has kept in good order. A stack of dry wood under a tarp. A cookpot hanging from a tripod.'],
+   o:[ { t:'Cook a proper dinner', cost:{ food:1 }, fx:{ spirit:2 }, r:'You cook it slowly. Biscuit gets the crust.' }, { t:'Stay quiet and look at the stars', fx:{ spirit:1, treats:1 }, r:'The sky is very large. Biscuit leans against your leg.' } ] },
+ { id:'f_house1', reg:null, at:['house'], who:null, img:['uiicons',7], t:'Locked Garage',
+   p:['The garage door has a padlock on it, an old one, rusted shut. There is a smell of oil and cold metal.'],
+   o:[ { t:'Cut the padlock with the hatchet', need:{ gadget:'hatchet' }, fx:{ parts:3, fuel:2 }, r:'Inside: a workbench, a half-full jerry can, and a drawer of washers.' },
+       { t:'Pry it with spare parts (2)', cost:{ parts:2 }, fx:{ parts:4, fuel:2 }, r:'It takes some effort. The shelves inside are mostly bare, but not entirely.' },
+       { t:'Leave it', fx:{ spirit:0 }, r:'Not everything has to be opened.' } ] },
+ { id:'f_house2', reg:null, at:['house'], who:null, img:['uiicons',4], t:'The Pantry',
+   p:['The kitchen has been left in order. In the pantry: jars, tins, a bag of flour sealed in a coffee can. On the wall, a child\'s height chart goes up to about four feet.'],
+   o:[ { t:'Take what you need', fx:{ food:2, gift:'*' }, r:'You leave a coin in the can on the way out.' } ] },
+ { id:'f_gas1', reg:null, at:['gas'], who:null, img:['uiicons',3], t:'The Attendant',
+   p:['An older man with a cap and a clipboard is writing numbers on the glass of the pump. He tells you which pump is the good one. He is correct.'],
+   o:[ { t:'Ask him about the road', fx:{ map:1 }, r:'"Take the left at the church," he says, "and then it all sort of sorts itself out."' }, { t:'Nod and keep going', fx:{ spirit:0 }, r:'He tips his cap.' } ] },
 ];
-})(typeof LRT!=='undefined'?LRT:require('./data.js'));
+L.EVENTS = E;
+C.eventFor = (G, i) => {
+  const n = G.nodes[i], t = L.NODE_T[i].t;
+  if (n.ev) return n.ev;
+  let pool = E.filter(e => e.story && e.reg === G.reg && e.node === i && !G.seenEv[e.id]);
+  if (!pool.length && C.rnd(G) < .6) {
+    pool = E.filter(e => !e.story && e.at.indexOf(t) >= 0 && (e.reg == null || e.reg === G.reg) && !G.seenEv[e.id]);
+    if (pool.length) pool = [C.pick(G, pool)];
+  }
+  n.ev = pool.length ? pool[0].id : '';
+  return n.ev;
+};
+C.evById = id => E.find(e => e.id === id);
+C.evHas = (G, o) => { // can the player take this option? returns reason or null
+  if (o.cost) for (const k in o.cost) if (G[k] < o.cost[k]) return 'Needs ' + o.cost[k] + ' ' + k;
+  if (o.need) { if (o.need.gadget && !C.has2(G, o.need.gadget)) return 'Needs ' + L.GADGETS[o.need.gadget].n; if (o.need.tag && !G.gifts.some(g => L.GIFTS[g].tags.indexOf(o.need.tag) >= 0)) return 'Needs ' + L.TAGN[o.need.tag]; }
+  return null;
+};
+C.evPick = (G, ev, oi) => { // run the chosen option; returns { fx:[...], r }
+  const o = ev.o[oi]; G.seenEv[ev.id] = 1; G.nodes[G.node].evDone = true;
+  if (o.haggle || o.shop) return { special:o.haggle ? 'haggle' : 'shop', who:o.haggle };
+  if (o.cost) for (const k in o.cost) G[k] -= o.cost[k];
+  if (o.need && o.need.tag) { const g = G.gifts.find(x => L.GIFTS[x].tags.indexOf(o.need.tag) >= 0); G.gifts.splice(G.gifts.indexOf(g), 1); }
+  const fx = C.applyFx(G, o.fx); if (ev.who && !G.meta.seenNpc[ev.who]) { G.meta.seenNpc[ev.who] = 1; G.meta.scrap['n_' + ev.who] = G.meta.scrap['n_' + ev.who] || { r:G.reg, day:G.day }; }
+  return { fx, r:o.r };
+};
+})(LRT);
