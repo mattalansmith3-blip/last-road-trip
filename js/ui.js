@@ -129,7 +129,7 @@ U.drawFog = () => {
 };
 const wob = (a, b, k) => { const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = b[0] - a[0], dy = b[1] - a[1], s = ((k * 37) % 7 - 3) * .012; return [mx - dy * s * 3, my + dx * s * 3]; };
 U.driveTo = b => {
-  const G = S.G; const c = C.canGo(G, b); const issues = [];
+  if (S.busy) return; const G = S.G; const c = C.canGo(G, b); const issues = [];
   if (c.fuelShort > 0) issues.push('You need ' + c.cost.fuel + ' fuel and have ' + G.fuel + '. You would push the van the last stretch: +' + c.fuelShort * 2 + ' hours, +' + c.fuelShort + ' wear, Spirit −1.');
   if (c.dusk) issues.push('It will be dark before you get there. Driving on at night: Wear +1, Spirit −1. Or make camp here first.');
   if (G.wear >= 9) issues.push('Marigold is nearly done (wear ' + G.wear + '). One more bump and she stops.');
@@ -205,7 +205,7 @@ screens.atlas = () => {
   root.__after = () => { U.drawFog(); U.coach('hud'); };
   return root;
 };
-U.pickNode = i => { sfx('soft'); S.sel = (S.sel === i) ? null : i; if (S.screen === 'atlas') { const keep = $('.panel'); U.render(); } };
+U.pickNode = i => { if (S.busy) return; sfx('soft'); S.sel = (S.sel === i) ? null : i; if (S.screen === 'atlas') { const keep = $('.panel'); U.render(); } };
 U.nodePanel = () => {
   const G = S.G, r = C.R(G), cur = G.node, sel = S.sel, wrap = h('div', { class:'np' });
   if (sel == null) {

@@ -133,7 +133,7 @@ const SPOTN = { town:4, gas:4, stop:4, camp:4, vista:3, wonder:3, house:5, trade
 C.makeSpots = (G, i) => {
   const t = L.NODE_T[i].t, n = SPOTN[t], spots = [], rm = L.REGIONS[G.reg].price;
   for (let k = 0; k < n; k++) {
-    let x, y, tries = 0; do { x = .12 + C.rnd(G) * .76; y = .5 + C.rnd(G) * .3; tries++; } while (tries < 30 && spots.some(s => Math.hypot(s.x - x, (s.y - y) * 1.1) < .24));
+    let x, y, tries = 0; do { x = .12 + C.rnd(G) * .76; y = .5 + C.rnd(G) * .3; tries++; } while (tries < 300 && spots.some(s => Math.hypot(s.x - x, (s.y - y) * 1.1) < .2));
     const box = (t === 'house' ? C.rnd(G) < .55 : t === 'gas' || t === 'stop' ? C.rnd(G) < .35 : t === 'camp' ? C.rnd(G) < .3 : C.rnd(G) < .22);
     const s = { x, y, got:false, open:false };
     if (box) { const kinds = G.reg < 1 ? { crate:5, cooler:4, lockbox:2, mailbox:2, safe:0 } : { crate:4, cooler:3, lockbox:3, mailbox:2, safe:2 }; s.box = C.wpick(G, kinds); }

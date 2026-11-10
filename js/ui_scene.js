@@ -20,7 +20,7 @@ function artView() {
 }
 function spotBox(s, k) {
   const sprIdx = { crate:0, cooler:1, lockbox:2, safe:3, mailbox:4 }[s.box] + (s.open ? 5 : 0);
-  return h('button', { class:'sbox' + (s.open ? ' open' : ''), style:'left:' + s.x * 100 + '%;top:' + s.y * 100 + '%', 'data-a':'box-' + k, onclick:e => { e.stopPropagation(); U.openBox(s); } }, sp('containers', sprIdx, 'boximg', s.box));
+  return h('button', { class:'sbox' + (s.open ? ' open' : ''), style:'left:' + s.x * 100 + '%;top:' + s.y * 100 + '%', 'data-a':'box-' + k, onclick:e => { e.stopPropagation(); const inn = $('.art-in'), n = S.G.nodes[S.G.node]; if (inn && n.spots) { const r = inn.getBoundingClientRect(), nx = (e.clientX - r.left) / r.width, ny = (e.clientY - r.top) / r.height, dd = q => Math.hypot(q.x - nx, (q.y - ny) * 1.1), db = dd(s); if (n.spots.some(q => !q.got && dd(q) < .15 && dd(q) < db)) { U.lookAt(e, inn); return; } } U.openBox(s); } }, sp('containers', sprIdx, 'boximg', s.box));
 }
 U.lookAt = (e, inner) => {
   const G = S.G, n = G.nodes[G.node]; if (!n.spots) return; const r = inner.getBoundingClientRect(); const nx = (e.clientX - r.left) / r.width, ny = (e.clientY - r.top) / r.height;

@@ -48,3 +48,9 @@ The v1 combat game was replaced by a full rewrite. Because the rewrite touched e
 ## v2 test results
 - Balance bot (500 runs each): reach Sunspire 100% at reflex skill .8, 91.8% at .65, 77% at .6, 34% at .5; median run 28-31 min. Gentle Mode at skill .7: 100%, median 26.8 min.
 - Real-tap Playwright (390x844 and 844x390): 0 JS errors. The tap bot occasionally stalls in landscape on a scene with a locked box or an unreached spot; this has not been reproduced as a game bug.
+
+## v2 follow-up 1 — stall investigation and soft-lock guards (2026-11-10 PT)
+- Cause of the "stuck scene" stalls: search spots could be placed close enough that a closed box sprite sat on top of a still-hidden spot, so taps landed on the box and the spot could not be reached; two boxes could also overlap. Fixes: spots keep at least .2 apart (300 placement tries), box sprites are narrower (16%), and tapping a box near an unfound spot now counts as a look instead of opening the box.
+- Cause of the "stuck atlas" stalls: not a game soft-lock. The test bot kept tapping during the 1 s drive animation. Real players are now guarded as well: pins and Drive are ignored while the van is driving.
+- Landscape: Pack, Scrapbook and Menu use the full width; the finale/postcard painting now sits in the left 44% so the lighthouse is no longer hidden behind the card. Coach "upgrade" card now shows right after the first part pickup; Continue resumes without a half-finished encounter.
+- Verification: real-tap runs at 390x844 and 844x390 both played Florida to the Sunspire finale (won) in ~305 steps each, 0 JS errors, 0 layout issues. Bot (200 runs, skill .65): 93% reach Sunspire, median 30 min.
