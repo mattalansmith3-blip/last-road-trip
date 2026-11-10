@@ -17,7 +17,7 @@ C.freshMeta = () => ({ v:2, lamps:{}, bp:{ rack:1, spare:1, lantern:1 }, scrap:{
 C.newGame = (meta, opts) => {
   opts = opts || {};
   const G = { v:2, rs:(opts.seed || Date.now()) >>> 0, meta, gentle:!!meta.gentle, reg:0, node:0, day:1, hour:0,
-    fuel:8, food:5, batt:4, parts:0, treats:2, spirit:6, wear:1, gadgets:[], gifts:[], souvs:[], pass:[], tape:meta.tape || 'blue',
+    fuel:8, food:5, batt:5, parts:0, treats:2, spirit:6, wear:1, gadgets:[], gifts:['honey'], souvs:[], pass:[], tape:meta.tape || 'blue',
     van:{ roof:null, front:null, wheels:null, rear:null, side:null, cab:null }, spareUsed:false, towFree:false,
     tows:0, lastLit:0, driveN:0, nodes:null, hid:{}, wx:'sun', fc:[], log:[], seenEv:{}, enc:null, ended:null, won:false,
     wondersThisTrip:0, hits:0, sightings:0, gbag:null, sbag:null, camps:0, mapSeen:{}, stats:{ drives:0, enc:0, ccHits:0, sfWins:0, hgWins:0, rbDone:0 } };
@@ -51,11 +51,11 @@ C.fuelCap = G => C.has(G, 'tank') ? 15 : L.FUEL_CAP;
 C.packCap = G => L.PACK + (C.has(G, 'rack') ? 4 : 0);
 C.packUsed = G => G.gadgets.length + G.gifts.length;
 C.dashCap = 4;
-C.tapeObj = G => (G.meta.tapes[G.tape] && C.has2(G, 'radio')) ? L.TAPE_BY_ID[G.tape] : null;
+C.tapeObj = G => (G.meta.tapes[G.tape] && (C.has2(G, 'radio') || G.tape === 'blue')) ? L.TAPE_BY_ID[G.tape] : null;
 C.has2 = (G, g) => G.gadgets.indexOf(g) >= 0;
 // sum of a passive effect from souvenirs, passengers, tape
 C.fx = (G, key) => { let s = 0; G.souvs.forEach(id => { s += (L.SOUV[id].fx[key] || 0); }); G.pass.forEach(id => { s += (L.PASS[id].fx[key] || 0); }); const t = C.tapeObj(G); if (t) s += (t.fx[key] || 0); return s; };
-C.quirks = G => { const q = []; if (G.wear >= 4) q.push({ n:'Pulls to the left', d:'Close Calls have one more obstacle.' }); if (G.wear >= 7) q.push({ n:'Runs rough', d:'+1 fuel on every drive.' }); if (G.wear >= 9) q.push({ n:'Smoke from the hood', d:'One more bump and it stops.' }); return q; };
+C.quirks = G => { const q = []; if (G.wear >= 4) q.push({ n:'Pulls to the left', d:'Close Calls have one more obstacle.' }); if (G.wear >= 7) q.push({ n:'Runs rough', d:G.gentle ? 'Nothing to worry about in Gentle Mode.' : '+1 fuel on every drive.' }); if (G.wear >= 9) q.push({ n:'Smoke from the hood', d:'One more bump and it stops.' }); return q; };
 C.install = (G, slot, part) => { // returns error string or null
   const h = L.HARD.find(x => x.id === slot); if (!h || (h.a !== part && h.b !== part)) return 'That does not fit there.';
   if (!G.meta.bp[part]) return 'You do not have the blueprint yet.';
@@ -76,13 +76,13 @@ C.typeKnown = (G, i) => { const n = G.nodes[i]; return n.seen >= 2 || n.typeKnow
 C.revealTypes = G => { G.nodes.forEach(n => { if (n.seen >= 1) n.typeKnown = true; }); G.mapSeen[G.reg] = 1; };
 C.edgeCost = (G, a, b) => {
   const p = C.pos(G, a), q = C.pos(G, b); const d = Math.hypot((q[0] - p[0]) * .75, q[1] - p[1]);
-  let hours = 1 + Math.round(d * 8), fuel = 1 + Math.round(d * 5);
-  const wx = G.wx; if (wx === 'rain' && !C.has(G, 'tires')) hours += 1; if (wx === 'wind') fuel += (C.has(G, 'rack') ? 2 : 1);
-  if (C.wclass(G) === 'heavy') fuel += 1; if (G.wear >= 7) fuel += 1;
-  if (G.gentle) fuel = Math.max(1, Math.round(fuel * .75));
-  return { hours:hours, fuel:Math.min(5, fuel), dist:d };
+  let hours = 1 + Math.round(d * 8), fuel = 1 + Math.round(d * 4);
+  const wx = G.wx; if (wx === 'rain' && !C.has(G, 'tires')) hours += 1;
+  if (!G.gentle) { if (wx === 'wind') fuel += 1; if (C.wclass(G) === 'heavy') fuel += 1; if (G.wear >= 7) fuel += 1; }
+  else fuel = Math.max(1, Math.ceil(fuel * .5));
+  return { hours:hours, fuel:Math.min(4, fuel), dist:d };
 };
-C.canGo = (G, b) => { const c = C.edgeCost(G, G.node, b); const out = { cost:c, ok:true, fuelShort:Math.max(0, c.fuel - G.fuel), dusk:c.hours > C.hoursLeft(G) }; return out; };
+C.canGo = (G, b) => { const c = C.edgeCost(G, G.node, b); const out = { cost:c, ok:true, fuelShort:Math.max(0, c.fuel - G.fuel), dusk:c.hours >= C.hoursLeft(G) }; return out; };
 
 // ---------- applying effects ----------
 C.msg = (G, t) => { G.log.push(t); if (G.log.length > 40) G.log.shift(); };
@@ -107,7 +107,7 @@ C.applyFx = (G, fx) => {
   if (fx.wear) { C.addWear(G, fx.wear); out.push({ k:'wear', n:fx.wear }); }
   if (fx.hours) { C.spendHours(G, fx.hours); out.push({ k:'hours', n:fx.hours }); }
   if (fx.gift) { const id = fx.gift === '*' ? C.pick(G, Object.keys(L.GIFTS)) : fx.gift; if (C.giveItem(G, 'gift', id)) out.push({ k:'gift', id }); else out.push({ k:'full', kind:'gift', id }); }
-  if (fx.gadget) { let id = fx.gadget === '*' ? C.addGadget(G) : fx.gadget; if (id) { if (C.giveItem(G, 'gadget', id)) out.push({ k:'gadget', id }); else out.push({ k:'full', kind:'gadget', id }); } else add('batt', 3); }
+  if (fx.gadget) { let id = fx.gadget === '*' ? C.addGadget(G) : fx.gadget; if (id === 'compass' && !G.hid[G.reg]) { G.hid[G.reg] = 1; C.markSeen(G); out.push({ k:'note', t:'The needle swings toward a side road. It is on the atlas now.' }); } if (id) { if (C.giveItem(G, 'gadget', id)) out.push({ k:'gadget', id }); else out.push({ k:'full', kind:'gadget', id }); } else add('batt', 3); }
   if (fx.souv) { let id = fx.souv === '*' ? (G.sbag.filter(x => G.souvs.indexOf(x) < 0)[0] || G.sbag[0]) : fx.souv; if (id) { if (C.giveItem(G, 'souv', id)) out.push({ k:'souv', id }); else out.push({ k:'full', kind:'souv', id }); } }
   if (fx.tape) { if (!G.meta.tapes[fx.tape]) { G.meta.tapes[fx.tape] = 1; out.push({ k:'tape', id:fx.tape }); } }
   if (fx.pass) { if (G.pass.indexOf(fx.pass) < 0) { G.pass.push(fx.pass); G.meta.scrap['p_' + fx.pass] = G.meta.scrap['p_' + fx.pass] || { r:G.reg }; out.push({ k:'pass', id:fx.pass }); } }
@@ -160,7 +160,7 @@ C.arrive = G => {
   C.markSeen(G);
   if (t.t === 'vista' && !n.vistaDone) { n.vistaDone = true; C.revealTypes(G); const d = 1 + C.fx(G, 'vista'); C.addSpirit(G, d); G.meta.scrap['v_' + C.R(G).id] = G.meta.scrap['v_' + C.R(G).id] || { r:G.reg, day:G.day }; n.vistaGain = d; }
   if (C.has(G, 'cb') && G.reg >= 0) {}
-  if (C.fx(G, 'hint') && !G.hid[G.reg]) { G.hid[G.reg] = 1; C.markSeen(G); }
+  if ((C.fx(G, 'hint') || C.has2(G, 'compass')) && !G.hid[G.reg]) { G.hid[G.reg] = 1; C.markSeen(G); }
 };
 // a tap on the picture. returns { hit:spot|null, fx, left }
 C.look = (G, nx, ny) => {
@@ -208,10 +208,10 @@ C.encounterChance = G => { let p = G.gentle ? .45 : .62; if (G.wx === 'fog') p +
 C.rollEncounter = (G, from, to) => {
   const t = L.NODE_T[to].t; if (G.nodes[to].seen >= 2 && C.rnd(G) < .45) return null; // known roads are quieter
   if (C.rnd(G) > C.encounterChance(G)) return null;
-  const w = { standoff:3, roadblock:3, haggle:2, closecall:3 };
+  const w = { standoff:3, roadblock:3, haggle:G.gifts.length ? 2 : 0, closecall:3 };
   if (G.wx === 'rain') w.closecall += 3; if (G.wx === 'fog') w.standoff += 2; if (G.wx === 'dust') w.roadblock += 2;
-  if (t === 'trader' || t === 'town') w.haggle += 3;
-  if (G.reg === 0 && G.driveN < 2) { return 'haggle'; } // gentle introduction
+  if ((t === 'trader' || t === 'town') && G.gifts.length) w.haggle += 3;
+  if (G.reg === 0 && G.driveN < 2) { return G.gifts.length ? 'haggle' : null; } // a gentle first drive: someone to trade with, never a wall
   return C.wpick(G, w);
 };
 C.drive = G => {}; // see C.go
@@ -226,7 +226,7 @@ C.go = (G, b) => {
   G.hour += c.hours; if (G.hour > C.dayLen(G)) G.hour = C.dayLen(G);
   G.driveN++; G.stats.drives++;
   // wear
-  let w = C.rnd(G) < .65 ? 1 : 0; if (c.dist > .24 && C.rnd(G) < .3) w++; if (G.wx === 'dust' && !C.has(G, 'tires') && c.dist > .2) w++; if (night) w++; if (C.wclass(G) === 'heavy' && C.rnd(G) < .3) w++;
+  let w = C.rnd(G) < .5 ? 1 : 0; if (c.dist > .24 && C.rnd(G) < .3) w++; if (G.wx === 'dust' && !C.has(G, 'tires') && c.dist > .2) w++; if (night) w++; if (C.wclass(G) === 'heavy' && C.rnd(G) < .3) w++;
   C.addWear(G, w); res.wearUp = w;
   if (night) C.addSpirit(G, -1);
   if (C.rnd(G) < .4) { const d0 = C.addSpirit(G, -1); if (d0) res.drain = true; }
@@ -241,20 +241,27 @@ C.breakdown = G => { // wear 10: spare wheel absorbs the first one
   if (C.has(G, 'spare') && !G.spareUsed) { G.spareUsed = true; G.wear = 5; return { saved:true }; }
   return { saved:false };
 };
+// a failed crossing step: the first miss at a crossing is a retry (an hour and a little wear), the second is a tow
+C.crossFail = G => { if ((G.crossFails || 0) < 1) { G.crossFails = 1; G.enc = null; C.spendHours(G, 1); C.addWear(G, 1); return { retry:true }; } return { retry:false }; };
 C.tow = (G, why) => {
   G.tows++; G.enc = null; if (why && why.indexOf('cross') === 0) G.crossFails = (G.crossFails || 0) + 1;
-  const free = C.fx(G, 'tow') && !G.towFree; let fee = 3; if (free) { G.towFree = true; fee = 0; }
+  const free = C.fx(G, 'tow') && !G.towFree; let fee = G.gentle ? 0 : 3; if (free) { G.towFree = true; fee = 0; }
   const paid = Math.min(G.batt, fee); G.batt -= paid;
-  const to = G.lastLit; G.node = to; G.wear = Math.min(G.wear, 3);
+  const to = G.lastLit; G.node = to; G.wear = Math.min(G.wear, 3); const fuelBefore = G.fuel; G.fuel = Math.max(G.fuel, G.gentle ? 5 : 3); const topUp = G.fuel - fuelBefore;
   C.addSpirit(G, -1); C.newDay(G); G.food = Math.max(0, G.food - 0);
   C.markSeen(G);
   const over = !G.gentle && G.tows > L.MAXTOW; if (over) G.ended = 'tows';
-  return { to, paid, fee, free, over, why };
+  return { to, paid, fee, free, over, why, topUp };
 };
 
 // ---------- gas station mechanic ----------
 C.fixFee = G => (G.reg >= 2 ? 2 : 1);
 C.mechanic = (G) => { if (G.wear <= 0) return { err:'Nothing to fix.' }; const fee = C.fixFee(G); if (G.batt < fee) return { err:'Not enough batteries.' }; G.batt -= fee; const w = Math.min(G.wear, 2); G.wear -= w; C.spendHours(G, 1); return { ok:true, w, fee }; };
+// ---------- odd jobs: a standing way to earn batteries at any stop with people in it ----------
+C.JOBT = ['town', 'gas', 'stop', 'trader'];
+C.jobPay = G => (G.reg >= 2 ? 3 : 2) + (G.gentle ? 1 : 0);
+C.canJob = G => { const n = G.nodes[G.node]; return C.JOBT.indexOf(L.NODE_T[G.node].t) >= 0 && n.jobDay !== G.day && C.hoursLeft(G) >= 1; };
+C.job = G => { if (!C.canJob(G)) return 0; const pay = C.jobPay(G); G.nodes[G.node].jobDay = G.day; C.spendHours(G, 1); G.batt += pay; return pay; };
 // ---------- trading ----------
 C.price = (G, k) => { let p = L.PRICE[k][G.reg]; if (k === 'fuel' && C.fx(G, 'gas')) p = Math.max(1, p - 1); return p; };
 C.buy = (G, k, n) => { // k: fuel, food, part
@@ -275,9 +282,9 @@ C.shopFor = G => {
 };
 
 // ---------- encounter: Standoff ----------
-C.sfNew = G => {
+C.sfNew = (G, crossing) => {
   const r = C.R(G), cid = C.pick(G, r.wild), c = L.CRITTERS[cid];
-  const st = { kind:'standoff', cid, calm:c.calm + C.fx(G, 'calm') + (G.spirit >= 7 ? 6 : 0) - (G.spirit <= 2 ? 8 : 0) + (G.gentle ? 12 : 0), pat:c.pat + (G.gentle ? 1 : 0), used:{}, log:[], turn:0, done:null };
+  const st = { kind:'standoff', cid, crossing:!!crossing, calm:c.calm + C.fx(G, 'calm') + (G.spirit >= 7 ? 6 : 0) - (G.spirit <= 2 ? 8 : 0) + (G.gentle ? 12 : 0) + (crossing ? 8 * (G.crossFails || 0) : 0), pat:c.pat + 1 + (G.gentle ? 1 : 0), used:{}, log:[], turn:0, done:null };
   return st;
 };
 C.sfActions = (G, st) => {
@@ -289,9 +296,10 @@ C.sfActions = (G, st) => {
   if (C.has2(G, 'whistle') && !st.used.whistle) A.push({ id:'whistle', label:'Play the tin whistle', sub:'Calm +' + (c.likes === 'sound' ? 50 : 30) + ', once' });
   if (C.has2(G, 'radio') && !st.used.radio) A.push({ id:'radio', label:'Turn the radio down low', sub:'1 battery. Calm +' + (c.likes === 'sound' ? 40 : 24), dis:G.batt < 1 ? 'No batteries' : null });
   A.push({ id:'honk', label:'Honk', sub:Math.round(C.honkP(G, st) * 100) + '% it leaves at once. Otherwise it gets nervous.' });
-  A.push({ id:'back', label:'Back away', sub:'Return to ' + C.nodeName(G, G.prevNode) + '. Costs 1 hour.' });
+  A.push(st.crossing ? { id:'back', label:'Back off and try again', sub:'Costs 1 hour. The crossing starts over.' } : { id:'back', label:'Back away', sub:'Return to ' + C.nodeName(G, G.prevNode) + '. Costs 1 hour.' });
   return A;
 };
+C.sfDecay = (G, c) => Math.max(1, Math.round(c.decay * .6) - (G.gentle ? 2 : 0));
 C.honkP = (G, st) => (C.has(G, 'bullbar') ? .75 : .45) - (L.CRITTERS[st.cid].big ? .15 : 0);
 C.sfAct = (G, st, id) => {
   const c = L.CRITTERS[st.cid]; let msg = '', gain = 0; st.turn++;
@@ -306,9 +314,10 @@ C.sfAct = (G, st, id) => {
     gain = -22; msg = 'The horn goes off and the ' + c.n.toLowerCase() + ' flattens its ears. It is not leaving.';
   }
   else if (id === 'back') { st.done = 'back'; return { msg:'You ease the van backwards until the road bends. It is not worth it.', done:'back' }; }
-  st.calm += gain; st.pat--; if (gain > 0) { /* nothing */ }
+  st.calm += gain; st.pat--;
   if (st.calm >= 100) { st.done = 'win'; return { msg, done:'win' }; }
-  st.calm = Math.max(0, st.calm - c.decay + (G.gentle ? 3 : 0));
+  st.calm = Math.max(0, st.calm - C.sfDecay(G, c));
+  if (st.pat <= 0 && st.calm >= 70 && !st.mercy) { st.mercy = 1; st.pat = 1; return { msg:msg + ' It is nearly there. It waits one more moment.', done:null, mercy:true }; }
   if (st.pat <= 0) { st.done = 'fail'; return { msg:msg + ' The ' + c.n.toLowerCase() + ' has lost patience. The van takes a hit and you retreat.', done:'fail' }; }
   return { msg, done:null };
 };
@@ -317,7 +326,7 @@ C.sfFinish = G => {
   C.spendHours(G, 1);
   if (st.done === 'win') { const c = L.CRITTERS[st.cid]; G.stats.sfWins++; out.fx = C.applyFx(G, { spirit:1, scrap:'c_' + st.cid }); if (C.rnd(G) < .4) out.fx = out.fx.concat(C.applyFx(G, { gift:'*' })); out.lines.push('The ' + c.n.toLowerCase() + ' wanders off the road. You wait until it is out of sight.'); }
   else if (st.done === 'fail') { C.addWear(G, 2); out.tow = true; }
-  else if (st.done === 'back') { G.node = G.prevNode; out.back = true; }
+  else if (st.done === 'back') { if (st.crossing) out.retreat = true; else { G.node = G.prevNode; out.back = true; } }
   return out;
 };
 
@@ -356,24 +365,23 @@ C.hgRewards = (G, st) => {
 // ---------- encounter: Close Call ----------
 C.ccNew = (G, len, crossing) => {
   len = len || (G.reg >= 2 ? 11 : 9);
-  const beat = !!C.tapeObj(G), gap = beat ? .95 : (G.gentle ? 1.3 : 1.1), rows = []; let t = 1.6, last = 1;
+  const beat = !!C.tapeObj(G), gap = beat ? 1.35 : (G.gentle ? 1.75 : 1.5), rows = []; let t = 1.8, last = 1;
   const extra = G.wear >= 4 ? 1 : 0; const slick = (G.wx === 'rain' && !C.has(G, 'tires')) ? 1 : 0;
   const n = Math.round(len / gap) + extra;
   for (let k = 0; k < n; k++) {
-    const lanes = [0, 0, 0]; let c = (C.rnd(G) < .25 && !G.gentle) ? 2 : 1; const free = C.ri(G, Math.max(0, last - 1), Math.min(2, last + 1));
-    // keep a lane reachable from the last free lane
-    for (let l = 0; l < 3 && c > 0; l++) { if (l !== free) { lanes[l] = 1; c--; } }
-    if (C.rnd(G) < .6) { const l = [0, 1, 2].filter(x => x !== free); if (l.length) lanes[l[C.ri(G, 0, l.length - 1)]] = 1; }
-    lanes[free] = 0; last = free;
-    rows.push({ t:+t.toFixed(2), lanes, sp:lanes.map(l => l ? C.ri(G, 0, 7) : -1) });
+    const lanes = [0, 0, 0]; const free = C.ri(G, Math.max(0, last - 1), Math.min(2, last + 1)); // the free lane is always next to the last one
+    const two = C.rnd(G) < (G.gentle ? .15 : .4); const others = [0, 1, 2].filter(x => x !== free);
+    lanes[others[C.ri(G, 0, 1)]] = 1; if (two) others.forEach(l => { lanes[l] = 1; });
+    last = free;
+    rows.push({ t:+t.toFixed(2), lanes, free, sp:lanes.map(l => l ? C.ri(G, 0, 7) : -1) });
     t += gap;
   }
-  return { kind:'closecall', rows, len:t + 1, beat, slick, speed:G.gentle ? .85 : 1, tol:C.ccTol(G) + (crossing ? (G.reg >= 2 ? -1 : 0) + (G.crossFails || 0) : 0) - (crossing ? 0 : 0), hits:0, done:null, crossing:!!crossing };
+  return { kind:'closecall', rows, len:t + 1, beat, slick, speed:G.gentle ? .85 : 1, tol:C.ccTol(G) + (crossing ? (G.reg >= 2 ? -1 : 0) + (G.crossFails || 0) : 0), hits:0, done:null, crossing:!!crossing };
 };
 C.ccTol = G => 3 + C.fx(G, 'cc') + (C.has(G, 'bullbar') ? 1 : 0) + (C.has(G, 'tires') ? 1 : 0) + (G.gentle ? 2 : 0);
 C.ccFinish = (G, st, hits, crossing) => {
   G.stats.ccHits += hits; const out = { hits, lines:[], fail:false };
-  C.addWear(G, Math.min(hits, 3)); if (hits > 2) C.addSpirit(G, -1);
+  C.addWear(G, Math.min(hits, 2)); if (hits > 2) C.addSpirit(G, -1);
   if (hits === 0) { const d = C.addSpirit(G, st.beat ? 2 : 1); out.lines.push('Clean run. (Spirit +' + d + ')'); }
   if (crossing && hits > st.tol) out.fail = true;
   return out;
@@ -387,8 +395,8 @@ C.restore = G => {
   if (n.restored) return { err:'Already restored.' }; if (G.parts < cost) return { err:'Needs ' + cost + ' parts.' };
   G.parts -= cost; n.restored = true; C.spendHours(G, 1); G.wondersThisTrip++;
   const first = !G.meta.lamps[w.id]; G.meta.lamps[w.id] = 1;
-  const BP = { orange:'tires', marguerite:'awning', elevator:'stove', dish:'cb' };
-  const fx = { spirit:2 + (C.has2(G, 'lens') ? 1 : 0), scrap:'w_' + w.id }; if (BP[w.id]) fx.bp = BP[w.id];
+  const BP = { orange:'tires', starlite:'solar', marguerite:'awning', elevator:'stove', dish:'cb' }, TP = { boneyard:'neon' };
+  const fx = { spirit:2 + (C.has2(G, 'lens') ? 1 : 0), scrap:'w_' + w.id }; if (BP[w.id]) fx.bp = BP[w.id]; if (TP[w.id]) fx.tape = TP[w.id];
   const out = C.applyFx(G, fx); const extra = C.applyFx(G, { gift:'*', batt:2 });
   return { out:out.concat(extra), first, w };
 };
@@ -399,9 +407,9 @@ C.nextRegion = G => {
   const done = G.reg; G.meta.scrap['x_' + L.REGIONS[done].id] = G.meta.scrap['x_' + L.REGIONS[done].id] || { r:done, day:G.day };
   if (done >= 3) { G.won = true; return { win:true }; }
   G.crossFails = 0; C.enterRegion(G, done + 1); C.newDay(G);
-  const fx = C.applyFx(G, { fuel:4, food:3, spirit:2, batt:2 }); return { fx };
+  const fx = C.applyFx(G, { fuel:5, food:3, spirit:2, batt:3 }); return { fx };
 };
-C.stars = G => 1 + (G.tows <= 2 ? 1 : 0) + (G.wondersThisTrip >= 6 ? 1 : 0);
+C.stars = G => 2 + ((G.tows <= 2 || G.wondersThisTrip >= 5) ? 1 : 0);
 
 // ---------- misc ----------
 C.score = G => ({ day:G.day, tows:G.tows, wonders:G.wondersThisTrip, stars:C.stars(G) });

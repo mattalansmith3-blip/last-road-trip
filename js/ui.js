@@ -42,7 +42,15 @@ U.layout = () => {
   root.style.setProperty('--sq', Math.round(Math.max(aw, ah)) + 'px'); root.style.setProperty('--sqoff', Math.round(-(Math.max(aw, ah) - ah) * .6) + 'px');
   if (S.screen === 'atlas') U.drawFog();
 };
-addEventListener('resize', () => setTimeout(U.layout, 60)); addEventListener('orientationchange', () => setTimeout(U.layout, 200));
+// Re-lay out after a rotate or resize. Phones report the new size a beat late, so ask again a few times.
+U.relayout = () => { U.layout(); if (U.ccRelayout) U.ccRelayout(); U.scrollCue(); };
+let rlT = [];
+const kick = () => { rlT.forEach(clearTimeout); rlT = [0, 60, 200, 450, 900].map(ms => setTimeout(() => requestAnimationFrame(U.relayout), ms)); };
+addEventListener('resize', kick); addEventListener('orientationchange', kick);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', kick);
+if (window.matchMedia) { const mq = window.matchMedia('(orientation: landscape)'); (mq.addEventListener ? mq.addEventListener('change', kick) : mq.addListener(kick)); }
+// a soft fade and a chevron when a panel has more below the fold
+U.scrollCue = () => { document.querySelectorAll('.panel').forEach(p => { const upd = () => p.classList.toggle('more', p.scrollHeight - p.clientHeight - p.scrollTop > 10); if (!p.__cue) { p.__cue = 1; p.addEventListener('scroll', upd, { passive:true }); } upd(); setTimeout(upd, 300); }); };
 
 // ---------- toasts, sheets ----------
 let toastT = null;
@@ -53,7 +61,7 @@ U.sheet = (title, body, opts) => {
   U.closeSheet(); opts = opts || {};
   const back = h('div', { id:'sheet', class:'sheet-back', onclick:e => { if (e.target === back && !opts.sticky) U.closeSheet(); } },
     h('div', { class:'sheet' + (opts.cls ? ' ' + opts.cls : '') }, title ? h('h2', null, title) : null, h('div', { class:'sheet-body' }, body), opts.actions ? h('div', { class:'sheet-actions' }, opts.actions) : null));
-  document.body.append(back); return back;
+  document.body.append(back); const hud = $('.hud'); if (hud && S.G) hud.replaceWith(U.hud()); return back;
 };
 U.closeSheet = () => { const s = sheetEl(); if (s) s.remove(); };
 U.btn = (label, cb, o) => { o = o || {}; const b = h('button', { class:'btn ' + (o.cls || 'btn-c'), disabled:o.dis ? true : null, 'data-a':o.a, onclick:e => { if (b.disabled) return; sfx('tap'); cb(e); } }, h('span', { class:'bl' }, label), o.sub ? h('span', { class:'sub' }, o.sub) : null); return b; };
@@ -84,8 +92,8 @@ const META = ['van', 'pack', 'book', 'menu', 'sunspire', 'howto'];
 U.go = (name, arg) => { if (META.indexOf(name) >= 0 && META.indexOf(S.screen) < 0) S.prev = [S.screen, S.arg]; S.screen = name; S.arg = arg; U.render(); };
 U.back = () => { const p = S.prev || [S.G ? 'scene' : 'title']; U.go(p[0], p[1]); };
 U.render = () => {
-  const app = $('#app'); app.innerHTML = ''; U.closeSheet(); if (U.stopLoops) U.stopLoops();
-  const fn = screens[S.screen]; if (!fn) return; if (U.setMusic) U.setMusic(); const el = fn(S.arg); app.append(el); U.layout(); if (el.__after) el.__after(); save();
+  const app = $('#app'); const oldP = $('.panel'); const keepTop = (oldP && S._rs === S.screen + ':' + (S.G ? S.G.node : '')) ? oldP.scrollTop : 0; app.innerHTML = ''; U.closeSheet(); if (U.stopLoops) U.stopLoops();
+  const fn = screens[S.screen]; if (!fn) return; if (U.setMusic) U.setMusic(); const el = fn(S.arg); app.append(el); S._rs = S.screen + ':' + (S.G ? S.G.node : ''); U.layout(); const np = $('.panel'); if (np && keepTop) np.scrollTop = keepTop; U.scrollCue(); if (el.__after) el.__after(); save();
 };
 U.refresh = () => { const sc = S.screen; U.render(); };
 // gains: chips describing what changed
@@ -132,7 +140,7 @@ U.driveTo = b => {
   if (S.busy) return; const G = S.G; const c = C.canGo(G, b); const issues = [];
   if (c.fuelShort > 0) issues.push('You need ' + c.cost.fuel + ' fuel and have ' + G.fuel + '. You would push the van the last stretch: +' + c.fuelShort * 2 + ' hours, +' + c.fuelShort + ' wear, Spirit −1.');
   if (c.dusk) issues.push('It will be dark before you get there. Driving on at night: Wear +1, Spirit −1. Or make camp here first.');
-  if (G.wear >= 9) issues.push('Marigold is nearly done (wear ' + G.wear + '). One more bump and she stops.');
+  if (G.wear >= 8) issues.push('Marigold is worn out (wear ' + G.wear + ' of 10). At 10 she stops and you are towed. A part or a mechanic brings it down.');
   const go = () => { U.closeSheet(); U.doDrive(b); };
   if (!issues.length) return go();
   U.sheet('Before you go', h('div', null, issues.map(t => h('p', { class:'warn' }, t))), { actions:[U.btn(c.fuelShort > 0 ? 'Push on anyway' : 'Drive on', go, { cls:'btn-r', a:'drive-anyway' }), c.dusk ? U.btn('Make camp here', () => { U.closeSheet(); U.doCamp(); }, { a:'camp-first' }) : null, U.btn('Stay', U.closeSheet, { a:'stay' })]});
@@ -147,7 +155,7 @@ U.doDrive = b => {
 U.afterDrive = res => {
   const G = S.G; S.sel = null; U.clearToast();
   if (G.wear >= 10 && !res.enc) return U.breakdown(() => U.arrive(res));
-  if (res.enc) return U.startEnc(res.enc, () => U.arrive(res));
+  if (res.enc) return U.startEnc(res.enc, () => U.arrive(res), { thenKind:'drive' });
   U.arrive(res);
 };
 U.arrive = res => {
@@ -170,18 +178,18 @@ U.tow = (why, then) => {
 };
 screens.tow = a => {
   const G = S.G; const r = a.r;
-  return h('div', { class:'scr full tow' }, h('div', { class:'fullart' }, sp('van', 2, 'towvan', ''), h('div', { class:'towbg' })),
-    h('div', { class:'fullcard' }, h('h1', null, 'A Tow'), h('p', null, a.msg), h('p', null, 'You wake at ' + C.nodeName(G, r.to) + '. ' + (r.free ? 'The blank plate on your dash does the talking: the tow is free this once.' : r.paid ? 'The fee: ' + r.paid + ' batteries.' : 'The driver does not charge you, since you have nothing to give.')), h('p', { class:'sm' }, 'Tows this trip: ' + G.tows + (G.gentle ? '' : ' of ' + L.MAXTOW + ' you can afford')),
+  return h('div', { class:'scr full tow' }, h('div', { class:'fullart towart' }, im('assets/big/tow.webp', 'towimg', 'A flatbed tow truck at dusk with the van chained on the back, and the dog waiting on the shoulder')),
+    h('div', { class:'fullcard' }, h('h1', null, 'A Tow'), h('p', null, a.msg), h('p', null, 'You wake at ' + C.nodeName(G, r.to) + '. ' + (r.free ? 'The blank plate on your dash does the talking: the tow is free this once.' : r.paid ? 'The fee: ' + r.paid + ' batteries.' : 'The driver does not charge you, since you have nothing to give.')), h('p', { class:'sm' }, 'Tows this trip: ' + G.tows + (G.gentle ? '. Gentle Mode has no limit.' : '. A sixth tow would end the trip.') + (r.topUp ? ' The driver tops up ' + r.topUp + ' fuel.' : '')),
       U.btn(a.over ? 'Continue' : 'Back on the road', () => { if (a.over) U.tripOver(); else if (a.then) { /* after tow the node changed; arrive */ S.ev = null; S.notes = []; U.go('scene'); } }, { cls:'btn-r', a:'tow-ok' })));
 };
 U.tripOver = () => { const G = S.G, m = S.meta; m.trips++; const keep = Object.keys(m.bp).length; G.ended = G.ended || 'tows'; save(); localStorage.removeItem('lrt2_run'); U.go('over'); };
-screens.over = () => { const G = S.G; return h('div', { class:'scr full' }, h('div', { class:'fullart' }, im('assets/big/title.webp', 'bgimg'), h('div', { class:'shade' })), h('div', { class:'fullcard' }, h('h1', null, 'The Trip Ends Here'), h('p', null, 'The van has been towed one time too many. Walt\'s flatbed takes you the rest of the way home, and nobody says very much.'), h('p', null, 'It is not wasted. Every blueprint, every lamp you lit at Sunspire, every Scrapbook page and every Mixtape stays with you. Next time you start with more.'), h('p', { class:'sm' }, 'You reached ' + C.R(G).n + ' on day ' + G.day + '.'), U.btn('Back to the title', () => { S.G = null; U.go('title'); }, { cls:'btn-r', a:'over-ok' }))); };
+screens.over = () => { const G = S.G; return h('div', { class:'scr full' }, h('div', { class:'fullart' }, im('assets/big/title.webp', 'bgimg'), h('div', { class:'shade' })), h('div', { class:'fullcard' }, h('h1', null, 'The Trip Ends Here'), h('p', null, 'The van has been towed six times. Walt\'s flatbed takes you the rest of the way home, and nobody says very much.'), h('p', null, 'It is not wasted. Every blueprint, every lamp you lit at Sunspire, every Scrapbook page and every Mixtape stays with you. Next time you start with more.'), h('p', { class:'sm' }, 'You reached ' + C.R(G).n + ' on day ' + G.day + '.'), U.btn('Back to the title', () => { S.G = null; U.go('title'); }, { cls:'btn-r', a:'over-ok' }))); };
 U.restDay = () => {
-  const G = S.G; C.newDay(G); G.food = Math.max(0, G.food - 1); G.spirit = 3; save();
+  const G = S.G; S.notes = []; C.newDay(G); G.food = Math.max(0, G.food - 1); G.spirit = 3; save();
   U.sheet('A day of rest', h('p', null, 'You are too tired to drive safely. You park, put the dog in the shade and sleep through most of a day. It helps. (Spirit back to 3. A day and a meal gone.)'), { sticky:true, actions:[U.btn('Carry on', () => { U.closeSheet(); U.go('scene'); }, { cls:'btn-r' })] });
 };
 U.doCamp = () => {
-  const G = S.G; const t = C.nodeT(G).t; const r = C.camp(G); sfx('soft'); S.ev = null;
+  const G = S.G; S.notes = []; const t = C.nodeT(G).t; const r = C.camp(G); sfx('soft'); S.ev = null;
   const wx = L.WEATHER_BY_ID[G.wx];
   const text = t === 'camp' ? 'A fire, a pot, the dog asleep against your leg. The day ends well.' : (t === 'stop' || t === 'town') ? 'You find a quiet corner behind the building and sleep in the van.' : C.has2(G, 'bag') ? 'You sleep rough, but the sleeping bag makes it fine.' : 'You sleep in the van on the shoulder of the road. Nobody sleeps well.';
   U.sheet('Day ' + (G.day) + ' begins', h('div', null, h('p', null, text), r.lines.map(t => h('p', { class:'warn' }, t)), U.gains([{ k:'spirit', n:r.spirit }].concat(r.solar ? [{ k:'batt', n:1 }] : [])), h('p', null, sp('weather', wx.idx, 'wx-s', ''), ' Today: ' + wx.n + '. ' + wx.d)), { sticky:true, actions:[U.btn('Get going', () => { U.closeSheet(); if (G.spirit <= 0) U.restDay(); else U.go(S.screen === 'scene' ? 'scene' : 'atlas'); }, { cls:'btn-r', a:'camp-ok' })] });

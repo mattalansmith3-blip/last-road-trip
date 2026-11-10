@@ -93,3 +93,32 @@ body.land .fullcard{left:auto;right:0;top:0;bottom:0;width:56%;max-width:none;ma
 .fc{display:flex;align-items:center;gap:4px}
 body.land .scr.fullm{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"hud" "panel" "nav"}body.land .scr.fullm .panel.full{grid-row:auto;grid-column:auto}body.land .scr.fullm .np{max-width:760px;margin:0 auto}
 body.land .fullart{right:56%}
+
+.ccroad .lanes{position:absolute;inset:0;pointer-events:none}.ccroad .ln{position:absolute;top:0;bottom:0;width:25%;transform:translateX(-50%);transition:background .12s}.ccroad .ln[data-l="0"]{left:25%}.ccroad .ln[data-l="1"]{left:50%}.ccroad .ln[data-l="2"]{left:75%}
+.ccroad .ln.me{background:linear-gradient(to top,rgba(255,244,214,.22),rgba(255,244,214,0) 70%)}.ccroad .ln.safe{box-shadow:inset 0 0 0 2px rgba(150,214,120,.55);background:linear-gradient(to bottom,rgba(150,214,120,.28),rgba(150,214,120,0) 80%)}
+.pawps small{display:block;font:600 11px/1 'Barlow Condensed',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#f5ead0;margin-bottom:4px;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.pawps{flex-wrap:wrap;justify-content:flex-end;max-width:160px}.pawps small{width:100%;text-align:right}
+
+/* ---- landscape: nav becomes a rail on the right, HUD is compact, panel gets the height ---- */
+body.land .scr{grid-template-columns:var(--aw) minmax(0,1fr) 62px;grid-template-rows:auto minmax(0,1fr);grid-template-areas:"art hud nav" "art panel nav"}
+body.land .nav{flex-direction:column;border-top:0;border-left:2px solid #1a110c;padding-bottom:0;padding-right:env(safe-area-inset-right)}
+body.land .nv{flex:1;flex-direction:column;min-height:0;gap:2px;padding:2px 0;justify-content:center}body.land .nv .ico{width:22px;height:22px}body.land .nv span{font-size:9.5px;letter-spacing:.03em}body.land .nv.on{box-shadow:inset 3px 0 0 var(--gold)}
+body.land .scr.fullm{grid-template-columns:minmax(0,1fr) 62px;grid-template-rows:auto minmax(0,1fr);grid-template-areas:"hud nav" "panel nav"}
+body.land .hud{padding:3px 6px}body.land .chip .ico{width:18px;height:18px}body.land .chip b{font-size:15px}body.land .chip small{font-size:9px}body.land .hud-r2{margin-top:2px}body.land .cell{padding:2px 5px}body.land .cl{font-size:13px}
+/* sticky header and pinned actions, scroll cue */
+.panel .np-h{position:sticky;top:0;z-index:4;margin:-10px -12px 8px;padding:10px 12px 6px;background:#eadcc0 url(../assets/big/paper.webp) center/cover;border-bottom:1px solid rgba(74,52,38,.18)}
+.pin-act{position:sticky;bottom:0;z-index:4;padding:8px 0 4px;margin-bottom:-4px;background:linear-gradient(to top,#eadcc0 70%,rgba(234,220,192,0))}
+.panel::after{content:"";display:block;position:sticky;bottom:0;height:34px;margin:-34px -12px 0;pointer-events:none;opacity:0;transition:opacity .2s;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 9l7 7 7-7' fill='none' stroke='%237a5a3e' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center 8px/20px,linear-gradient(to top,rgba(234,220,192,.97) 35%,rgba(234,220,192,0))}
+.panel.more::after{opacity:1}
+body .pin-act.acts{display:flex;gap:8px}
+body .pin-act.acts .btn{flex:1;margin:0;min-height:48px;padding:6px 8px}
+body .pin-act.acts .btn .sub{display:none}
+body.land .pin-act .btn{min-height:46px}
+body.land .pin-act .btn .sub{display:none}
+body:not(.land) .scr.enc:not(.cc) .artcol{max-height:30dvh}
+body:not(.land) .scr.enc:not(.cc) .artcol .encart,body:not(.land) .scr.enc:not(.cc) .artcol>*{max-height:30dvh}
+.panel{scroll-padding:70px 0 100px}
+.towart{background:linear-gradient(#78689a 0,#78689a 22%,#3f3643 78%)}.towimg{position:absolute;left:0;top:5%;width:100%;aspect-ratio:1/1;object-fit:cover;-webkit-mask-image:linear-gradient(transparent,#000 10%,#000 88%,transparent);mask-image:linear-gradient(transparent,#000 10%,#000 88%,transparent)}body.land .towart{background:#3f3643}body.land .towimg{top:0;height:100%;width:auto;left:50%;transform:translateX(-50%);-webkit-mask-image:none;mask-image:none}
+img.crit.npc{-webkit-mask-image:linear-gradient(#000 82%,transparent);mask-image:linear-gradient(#000 82%,transparent);filter:sepia(.08) saturate(.95) brightness(.96) drop-shadow(0 6px 10px rgba(30,18,12,.35))}
+#toasts{top:calc(env(safe-area-inset-top) + 112px)}body.land #toasts{top:calc(env(safe-area-inset-top) + 76px);right:62px}
+.hud{padding-top:max(0px,env(safe-area-inset-top))}

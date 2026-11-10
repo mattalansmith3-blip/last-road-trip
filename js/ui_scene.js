@@ -67,7 +67,7 @@ function evCard() {
 }
 U.pickOpt = (ev, i) => {
   const G = S.G; const res = C.evPick(G, ev, i); sfx('soft');
-  if (res.special === 'haggle') return U.startEnc('haggle', () => U.go('scene'), { who:res.who, voluntary:true });
+  if (res.special === 'haggle') return U.startEnc('haggle', () => U.go('scene'), { who:res.who, voluntary:true, thenKind:'scene' });
   if (res.special === 'shop') { S.ev = null; return U.shopSheet(); }
   S.ev = { ev, res, text:res.r }; sfx((res.fx || []).some(o => o.k === 'pass') ? 'win' : 'coin');
   U.save(); U.updateChrome(); U.handleFull(res.fx, () => U.updateChrome());
@@ -76,10 +76,11 @@ U.scenePanel = () => {
   const G = S.G, n = G.nodes[G.node], t = C.nodeT(G), r = C.R(G), w = wrapEl(), type = t.t;
   w.append(h('div', { class:'np-h' }, h('div', null, h('h3', null, C.nodeName(G)), h('small', null, kindOf(G, G.node) + ' · ' + r.short)), U.btn('Atlas', () => U.go('atlas'), { cls:'btn-t', a:'to-atlas' })));
   if (S.notes && S.notes.length) { S.notes.forEach(t => w.append(h('p', { class:'note' }, t))); }
+  if (G.batt <= 1 && G.fuel <= 2 && C.JOBT.indexOf(type) < 0) w.append(h('p', { class:'note' }, 'Running low on fuel and batteries. Look around the picture for supplies, or find a stop with people in it and take an odd job.'));
   if (type === 'vista' && n.vistaDone && n.vistaGain) w.append(h('p', { class:'note' }, 'You stop and look for a while. The atlas fills in: every stop shows its true name now. (Spirit +' + n.vistaGain + ')'));
   const wd = type === 'wonder' ? C.lampWonder(G, G.node) : null;
   w.append(h('p', { class:'desc' }, type === 'wonder' ? wd.txt : type === 'cross' ? r.cross.txt : DESC[type]));
-  if (S.ev && S.ev.ev && S.ev.res && S.ev.res.r) { w.append(h('div', { class:'evc res' }, h('p', null, S.ev.res.r), U.gains(S.ev.res.fx), U.btn('Continue', () => { S.ev = null; U.updateChrome(); if (S.G.parts >= 3 && !S.G.van.roof && !(S.meta.coach && S.meta.coach.upgrade)) U.coach('upgrade'); }, { cls:'btn-t', a:'ev-continue' }))); }
+  if (S.ev && S.ev.ev && S.ev.res && S.ev.res.r) { w.append(h('div', { class:'evc res' }, h('p', null, S.ev.res.r), U.gains(S.ev.res.fx), h('div', { class:'pin-act' }, U.btn('Continue', () => { S.ev = null; U.updateChrome(); if (S.G.parts >= 3 && !S.G.van.roof && !(S.meta.coach && S.meta.coach.upgrade)) U.coach('upgrade'); }, { cls:'btn-t', a:'ev-continue' })))); }
   else { const c = evCard(); if (c) w.append(c); }
   const blocked = S.ev && S.ev.res && S.ev.res.r;
   // actions
@@ -92,13 +93,14 @@ U.scenePanel = () => {
   if (type === 'gas' || type === 'trader') {
     const pf = C.price(G, 'fuel'), room = C.fuelCap(G) - G.fuel;
     act.append(U.btn('Buy fuel', () => U.buyFuel(1), { cls:'btn-t', sub:pf + ' battery per fuel · tank ' + G.fuel + '/' + C.fuelCap(G), dis:room < 1 || G.batt < pf, a:'buy-fuel1' }));
-    act.append(U.btn('Fill the tank', () => U.buyFuel(room), { cls:'btn-t', sub:room > 0 ? (room + ' fuel for ' + Math.min(room, Math.floor(G.batt / pf)) * pf + ' batteries' + (G.batt < room * pf ? ' (all you can afford)' : '')) : 'Already full', dis:room < 1 || G.batt < pf, a:'buy-fuelfill' }));
+    const can = Math.min(room, Math.floor(G.batt / pf)); act.append(U.btn('Fill the tank', () => U.buyFuel(room), { cls:'btn-t', sub:room < 1 ? 'Already full' : can < 1 ? 'Needs ' + pf + ' battery for the first fuel' : can + ' fuel for ' + can * pf + ' batteries' + (can < room ? ' (all you can afford)' : ''), dis:room < 1 || G.batt < pf, a:'buy-fuelfill' }));
   }
   if (type === 'gas' && G.wear > 0) act.append(U.btn('Mechanic: fix 2 wear', () => { const r = C.mechanic(G); if (r.err) U.toast(r.err); else { sfx('wrench'); U.toast('Fixed ' + r.w + ' wear for ' + r.fee + ' battery. An hour goes by.'); } U.updateChrome(); }, { cls:'btn-t', sub:C.fixFee(G) + ' battery and an hour', dis:G.batt < C.fixFee(G), a:'mechanic' }));
   if (type === 'stop' || type === 'town' || type === 'trader') { const pf = C.price(G, 'food'); act.append(U.btn('Buy food', () => { const r = C.buy(G, 'food', 2); if (r.err) U.toast(r.err); else { sfx('coin'); U.toast('Two days of food.'); } U.updateChrome(); }, { cls:'btn-t', sub:'2 food for ' + pf * 2 + ' batteries', dis:G.batt < pf * 2, a:'buy-food' })); }
   if (type === 'trader') { act.append(U.btn('Look at the table', () => U.shopSheet(), { cls:'btn-t', sub:'Blueprints, maps, gear, and selling', a:'shop' })); if (!n.haggled) act.append(U.btn('Haggle with him', () => { n.haggled = true; U.startEnc('haggle', () => U.go('scene'), { who:'ray', voluntary:true }); }, { cls:'btn-c', sub:'Bring gifts', a:'haggle' })); }
   if (G.wear > 0 && G.parts > 0) { const per = C.repairPerPart(G); act.append(U.btn('Repair the van', () => { const w2 = C.repair(G, 1); C.spendHours(G, 1); sfx('wrench'); U.toast('Fixed ' + w2 + ' wear with one part. An hour goes by.'); U.updateChrome(); }, { cls:'btn-c', sub:'1 part = −' + per + ' wear · 1 hour · wear ' + G.wear, a:'repair' })); }
-  if (type === 'cross') act.append(U.btn('Begin the crossing', () => U.runCrossing(), { cls:'btn-r', sub:r.cross.seq.length + ' challenges. If it goes badly, a tow takes you back to the last lit stop.', a:'cross' }));
+  if (C.JOBT.indexOf(type) >= 0) { const pay = C.jobPay(G), need = G.batt <= 1 || G.fuel <= 2; act.append(U.btn('Odd job (1 hour)', () => { const p = C.job(G); if (p) { sfx('coin'); U.toast('A few hours of honest work. +' + p + ' batteries.'); } U.updateChrome(); }, { cls:need ? 'btn-r' : 'btn-t', sub:C.canJob(G) ? '+' + pay + ' batteries. Someone always needs a hand.' + (need ? ' Running low? Start here.' : '') : (C.hoursLeft(G) < 1 ? 'No daylight left for it' : 'Done for today'), dis:!C.canJob(G), a:'job' })); }
+  if (type === 'cross') act.append(h('div', { class:'pin-act' }, U.btn('Begin the crossing', () => U.runCrossing(), { cls:'btn-r', sub:r.cross.seq.length + ' challenges. A first miss lets you try again; a second means a tow to the last lit stop.', a:'cross' })));
   const left = C.hoursLeft(G);
   act.append(U.btn(type === 'camp' ? 'Make camp' : 'Sleep here', () => U.doCamp(), { cls:type === 'camp' ? 'btn-t' : 'btn-c', sub:(left > 0 ? left + ' hours of daylight left. ' : 'Night has fallen. ') + (type === 'camp' ? 'Rest, eat, wake to a new day.' : 'Rest here and start a new day.'), a:'camp' }));
   w.append(act); return w;
@@ -132,13 +134,13 @@ U.shopSheet = () => {
 const sprSrc = (set, i) => L.img(set, i);
 // ----- crossings -----
 U.runCrossing = () => {
-  const G = S.G, seq = C.R(G).cross.seq; S.cross = { i:0 }; U.crossStep();
+  const G = S.G, seq = C.R(G).cross.seq; S.cross = G.cross = { i:0 }; U.crossStep();
 };
 U.crossStep = () => {
   const G = S.G, seq = C.R(G).cross.seq, i = S.cross.i;
   if (i >= seq.length) return U.regionEnd();
   const kind = seq[i];
-  U.startEnc(kind, () => { S.cross.i++; U.crossStep(); }, { crossing:true, step:i + 1, of:seq.length });
+  U.startEnc(kind, () => { S.cross.i++; U.crossStep(); }, { crossing:true, step:i + 1, of:seq.length, thenKind:'cross' });
 };
 U.regionEnd = () => {
   const G = S.G; const doneReg = G.reg; const r = C.nextRegion(G); sfx('win'); U.save();

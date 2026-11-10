@@ -8,10 +8,10 @@ L.UI = { blueprint:0, lampOn:1, lampOff:2, look:3, photo:4, star:5, starOff:6, l
 L.WEATHER = [
   { id:'sun',  n:'Clear',    idx:0, d:'Easy driving.' },
   { id:'over', n:'Overcast', idx:1, d:'Flat light. Nothing unusual.' },
-  { id:'rain', n:'Rain',     idx:2, d:'Slow roads. +1 hour per drive, slick Close Calls.' },
+  { id:'rain', n:'Rain',     idx:2, d:'Slow roads. +1 hour per drive.' },
   { id:'wind', n:'Wind',     idx:3, d:'Headwind. +1 fuel per drive.' },
-  { id:'dust', n:'Dust',     idx:4, d:'Grit in everything. Extra wear on long drives.' },
-  { id:'fog',  n:'Fog',      idx:5, d:'You can only see the next stop. More animals on the road.' },
+  { id:'dust', n:'Dust',     idx:4, d:'Grit in everything. Extra wear on long drives, and more roadblocks.' },
+  { id:'fog',  n:'Fog',      idx:5, d:'More animals on the road.' },
 ];
 L.WEATHER_BY_ID = {}; L.WEATHER.forEach(w => L.WEATHER_BY_ID[w.id] = w);
 
@@ -20,16 +20,16 @@ L.WEATHER_BY_ID = {}; L.WEATHER.forEach(w => L.WEATHER_BY_ID[w.id] = w);
 L.GADGETS = {
   radio:   { n:'Crank Radio', i:0, d:'Soothes animals at a Standoff. Plays any Mixtape you find.', tags:['music'], sell:3 },
   binoc:   { n:'Binoculars', i:1, d:'Shows what kind of stop is next to you on the atlas.', sell:3 },
-  compass: { n:'Compass', i:2, d:'Points toward hidden side roads in each region.', sell:3 },
+  compass: { n:'Compass', i:2, d:'Shows the hidden side road in every region.', sell:3 },
   tape:    { n:'Duct Tape', i:3, d:'Patch 2 wear off the van, once. Gets used up.', use:'wear', sell:2 },
   thermos: { n:'Thermos', i:4, d:'Every camp: +1 Spirit.', sell:3 },
-  bag:     { n:'Sleeping Bag', i:5, d:'Sleep rough without losing Spirit.', sell:3 },
+  bag:     { n:'Sleeping Bag', i:5, d:'Sleeping rough, away from a camp or a stop, costs no extra Spirit.', sell:3 },
   whistle: { n:'Tin Whistle', i:6, d:'A steady note. Big calm at a Standoff, once per encounter.', tags:['music'], sell:3 },
   lens:    { n:'Camera Lens', i:7, d:'Better photos: restoring a Wonder gives +1 Spirit.', sell:4 },
-  torch:   { n:'Flashlight', i:8, d:'One extra look at every stop. Fewer hits in night Close Calls.', sell:3 },
+  torch:   { n:'Flashlight', i:8, d:'One extra look at every stop.', sell:3 },
   rope:    { n:'Rope', i:9, d:'Clears a Tangled or Stuck Roadblock.', tags:['tangled','stuck'], sell:3 },
   hatchet: { n:'Hatchet', i:10, d:'Clears Wood. Opens a lockbox.', tags:['wood'], sell:3 },
-  gloves:  { n:'Work Gloves', i:11, d:'Clears Debris and Spiky things.', tags:['debris'], sell:2 },
+  gloves:  { n:'Work Gloves', i:11, d:'Clears Debris.', tags:['debris'], sell:2 },
 };
 L.GIFTS = {
   honey:   { n:'Jar of Honey',     i:0,  tags:['sweet'], sell:2 },
@@ -65,10 +65,10 @@ L.SOUV = {
 L.TAPES = [
   { id:'blue',  n:'Blue Highway',     i:0, d:'Every second drive: +1 Spirit.', fx:{ drive:1 }, from:'Start of the trip' },
   { id:'brass', n:'Sunday Brass',     i:1, d:'Standoffs start with +8 calm.',  fx:{ calm:8 }, from:'Odile, Gulf Coast' },
-  { id:'slow',  n:'Slow Radio',       i:2, d:'Camp: +1 Spirit.',              fx:{ camp:1 }, from:'A Gulf Coast mailbox' },
+  { id:'slow',  n:'Slow Radio',       i:2, d:'Camp: +1 Spirit.',              fx:{ camp:1 }, from:'Walt, Gulf Coast' },
   { id:'wide',  n:'Wide Open',        i:3, d:'Haggles open 10 mood higher.',  fx:{ haggle:10 }, from:'Rosa, Texas' },
   { id:'neon',  n:'Neon Hum',         i:4, d:'Close Calls forgive one hit.',  fx:{ cc:1 }, from:'The Sign Boneyard' },
-  { id:'last',  n:'Last Light',       i:5, d:'Every drive: a little Spirit back.', fx:{ drive:1, camp:1 }, from:'Ines, at Sunspire' },
+  { id:'last',  n:'Last Light',       i:5, d:'Every second drive: +1 Spirit. Camp: +1 Spirit.', fx:{ drive:1, camp:1 }, from:'Ines, at Sunspire' },
 ];
 L.TAPE_BY_ID = {}; L.TAPES.forEach(t => L.TAPE_BY_ID[t.id] = t);
 
@@ -105,8 +105,8 @@ L.HARD = [
 ];
 L.VPARTS = {
   rack:   { n:'Roof Rack',     i:0,  w:2, cost:3, d:'Carry 4 more things. Catches headwinds: +1 fuel in wind.', bp:'start' },
-  solar:  { n:'Solar Panels',  i:3,  w:2, cost:4, d:'+1 battery at every camp.', bp:'Ray Pruitt' },
-  bullbar:{ n:'Bull Bar',      i:1,  w:3, cost:4, d:'Honking is safer. Clears Debris. Close Calls: forgives a hit.', bp:'Gulf Coast' },
+  solar:  { n:'Solar Panels',  i:3,  w:2, cost:4, d:'+1 battery at every camp.', bp:'The Starlite Drive-In' },
+  bullbar:{ n:'Bull Bar',      i:1,  w:3, cost:4, d:'Honking is safer. Clears Debris and Heavy things. Close Calls: forgives a hit.', bp:'Gulf Coast' },
   winch:  { n:'Winch',         i:11, w:3, cost:5, d:'Clears Heavy and Stuck Roadblocks.', bp:'Texas' },
   tires:  { n:'Off-road Tires',i:2, w:2, cost:4, d:'Rain and dust cost nothing extra. Close Calls: forgives a hit.', bp:'Florida Wonder' },
   spare:  { n:'Spare Wheel',   i:6,  w:1, cost:2, d:'Absorbs your first breakdown: no tow.', bp:'start' },
@@ -124,7 +124,7 @@ L.CRITTERS = {
   gator:  { n:'Gator',  i:0, calm:20, pat:5, decay:6, likes:'food', big:1, scrap:'a gator, sunning itself on warm asphalt' },
   boar:   { n:'Wild Boar', i:1, calm:18, pat:5, decay:8, likes:'food', scrap:'a boar, deciding about you' },
   bear:   { n:'Black Bear', i:2, calm:15, pat:5, decay:7, likes:'food', big:1, scrap:'a bear with somewhere better to be' },
-  cougar: { n:'Cougar', i:3, calm:12, pat:4, decay:8, likes:'sound', scrap:'a cougar on a fence post' },
+  cougar: { n:'Cougar', i:3, calm:14, pat:5, decay:7, likes:'sound', scrap:'a cougar on a fence post' },
   coyote: { n:'Coyote', i:4, calm:22, pat:6, decay:5, likes:'sound', scrap:'a coyote who has seen your type' },
   steer:  { n:'Longhorn', i:5, calm:25, pat:6, decay:5, likes:'food', big:1, scrap:'a longhorn, in no hurry at all' },
 };
@@ -199,7 +199,7 @@ L.REGIONS = [
     blurb:'Salt flats, blue-hour neon and the last long stretch to the coast.',
     wild:['coyote','cougar','steer'], tint:'#c98d5b',
     names:['Amboy Junction','Desert Pumps','Starlight Motel','Joshua Camp','Sunset Viewer','The Sign Boneyard','Adobe House','The Dish','The Sundial','Desert Market','Dune Camp','Salt Flat Gas','Pool Hall Motel','Amboy Road'],
-    wonders:{ A:{id:'boneyard',n:'The Sign Boneyard',cost:4,verb:'Light a letter',txt:'A field of enormous painted letters, gone pale from the sun. Dee has been pulling them upright.', done:'One by one, the letters go amber. They almost spell something.'},
+    wonders:{ A:{id:'boneyard',n:'The Sign Boneyard',cost:4,verb:'Light a sign',txt:'Old motel and casino signs, hauled out here when the town stopped paying their power bills. A boot, a star, a martini glass. Dee has been standing them back up.', done:'One by one, the old signs go amber. The boot goes last.'},
               B:{id:'dish',n:'The Dish',cost:4,verb:'Turn it to the sky',txt:'A radio dish the size of a house, aimed at nothing in particular. The motor still works.', done:'It swings slowly to the east and holds. You can feel it listening.'},
               C:{id:'sundial',n:'The Sundial',cost:3,verb:'Clear the face',txt:'A bronze gnomon on a stone ring, buried to the hour marks in drifted sand.', done:'The shadow falls exactly where it should. It is later than you thought.'} },
     cross:{ n:'Amboy Road', seq:['standoff','closecall','roadblock'], txt:'The last pass before the coast. Salt, wind, and a long straight road with surprises on it.', len:14 } },
@@ -209,7 +209,7 @@ L.REG_NAMES = ['Florida','Gulf Coast','Texas','Mojave'];
 // shop prices etc
 L.PRICE = { fuel:[1,2,2,3], food:[1,1,2,2], part:[2,3,3,4] };
 L.FUEL_CAP = 10; L.PACK = 8; L.HOURS = 8;
-L.MAXTOW = 4;
+L.MAXTOW = 5;
 
 // persisted cross-trip things; see core.freshMeta
 L.WONDER_IDS = []; L.REGIONS.forEach(r => ['A','B','C'].forEach(k => L.WONDER_IDS.push(r.wonders[k].id)));

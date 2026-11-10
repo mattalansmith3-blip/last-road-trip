@@ -54,3 +54,15 @@ The v1 combat game was replaced by a full rewrite. Because the rewrite touched e
 - Cause of the "stuck atlas" stalls: not a game soft-lock. The test bot kept tapping during the 1 s drive animation. Real players are now guarded as well: pins and Drive are ignored while the van is driving.
 - Landscape: Pack, Scrapbook and Menu use the full width; the finale/postcard painting now sits in the left 44% so the lighthouse is no longer hidden behind the card. Coach "upgrade" card now shows right after the first part pickup; Continue resumes without a half-finished encounter.
 - Verification: real-tap runs at 390x844 and 844x390 both played Florida to the Sunspire finale (won) in ~305 steps each, 0 JS errors, 0 layout issues. Bot (200 runs, skill .65): 93% reach Sunspire, median 30 min.
+
+## v2 review fixes 1 — economy, encounters, landscape, copy, rewards, art (2026-11-10 PT)
+Source: Zombie Bot 2's full review (ideas/ZB2_FULL_REVIEW_V2.md). Done in ZB2's priority order.
+- Economy: fuel use per leg is lower (1 + 4 x distance, wind/heavy/wear surcharges capped), Gentle is half fuel with no surcharges, free tows with no limit. Odd jobs (1 hour, +2/+3 batteries) at town, gas, stop and trader nodes give guaranteed battery income and are flagged "Running low? Start here." when fuel or batteries are low. Tows top the tank up. Region-border gift is bigger. New human-like bot (tools/human.js).
+- Landscape: a nav rail on the right, compact HUD, sticky panel header, pinned primary action buttons, and a scroll cue (fade plus chevron) when there is more below. Layout re-runs on resize, orientationchange, visualViewport and matchMedia, with retries, so rotating mid-run is correct at once (checked in real-tap runs).
+- Close Calls: sparser rows, a clear lane always adjacent to the last, lane guide strips with a green glow, honest "Hits n of N allowed" labels, wear capped at 2 per run.
+- Standoffs: patience is shown, a mercy turn when the ring looks full, backing out of a crossing restarts it (1 hour) instead of skipping it. A first crossing miss is a retry (1 hour, +1 wear); the second is a tow.
+- First haggle needs a gift, and the player starts with one. Finish is always at least 2 stars.
+- Copy: How to Play, fill-the-tank, weather, gadgets, Last Light, tow limit (a sixth tow ends a regular trip) all match the rules.
+- Dead rewards hooked up: Neon Hum from the Sign Boneyard, Blue Highway plays without the radio, Compass shows the side road, Rosa gives a Texas hint, region blueprints come from the Wonder restored.
+- Art (GenerateImage, same gouache style): Sign Boneyard repainted with signs instead of letters; the ten NPC portraits repainted with distinct, weathered faces and warm low-sun lighting; a new flatbed tow scene replaces the floating van. Layout, text, bars, the Calm ring and route strokes remain code.
+- Bot (300 runs): human-like skill .7 reaches Sunspire 99%, median 31 min, 1.2 tows; Gentle 100%, 26 min, 0.2 tows; skill .4 60% (loses at the last crossing; Gentle is the answer); power bot 100%, 27 min.
