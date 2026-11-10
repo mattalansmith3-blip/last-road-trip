@@ -118,9 +118,9 @@ const E = [
 ];
 L.EVENTS = E;
 C.eventFor = (G, i) => {
-  const n = G.nodes[i], t = L.NODE_T[i].t;
+  const n = G.nodes[i], t = C.nodeT(G, i).t, idn = C.ident(G, i);
   if (n.ev) return n.ev;
-  let pool = E.filter(e => e.story && e.reg === G.reg && e.node === i && !G.seenEv[e.id]);
+  let pool = E.filter(e => e.story && e.reg === G.reg && e.node === idn && !G.seenEv[e.id] && C.evReq(G, e));
   if (!pool.length && C.rnd(G) < .6) {
     pool = E.filter(e => !e.story && e.at.indexOf(t) >= 0 && (e.reg == null || e.reg === G.reg) && !G.seenEv[e.id]);
     if (pool.length) pool = [C.pick(G, pool)];
@@ -128,6 +128,14 @@ C.eventFor = (G, i) => {
   n.ev = pool.length ? pool[0].id : '';
   return n.ev;
 };
+// later trips open new stories: a beat can ask for a lit lamp, an earlier trip, a person met, or a keepsake page
+C.evReq = (G, e) => { const q = e.req; if (!q) return true; const m = G.meta;
+  if (q.trips && (m.trips || 0) + (m.arrived || 0) < q.trips) return false;
+  if (q.lamps && C.lamps(m) < q.lamps) return false;
+  if (q.lamp && !m.lamps[q.lamp]) return false;
+  if (q.npc && !m.seenNpc[q.npc]) return false;
+  if (q.scrap && !m.scrap[q.scrap]) return false;
+  return true; };
 C.evById = id => E.find(e => e.id === id);
 C.evHas = (G, o) => { // can the player take this option? returns reason or null
   if (o.cost) for (const k in o.cost) if (G[k] < o.cost[k]) return 'Needs ' + o.cost[k] + ' ' + k;

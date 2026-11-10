@@ -3,7 +3,7 @@
 const C = L.core, U = L.ui, S = U.S, h = U.h, im = U.im, sp = U.sp, ico = U.ico, sfx = U.sfx, $ = (s, e) => (e || document).querySelector(s);
 const KIND = { town:'A small town', gas:'Gas station', stop:'Roadside stop', camp:'Campsite', vista:'Viewpoint', wonder:'A Wonder', house:'Abandoned house', trader:'Trading post', cross:'The Crossing' };
 const DESC = { town:'A few buildings, one of them with a light on.', gas:'Two pumps and a bench. The sign still says OPEN.', stop:'A place to sit down, with a door that works.', camp:'Flat ground, a fire ring, and room to hear yourself think.', vista:'The road runs out ahead of you, and you can see a long way.', house:'Somebody\'s home, left in order.', trader:'A tarp is up and the table is out.' };
-const kindOf = (G, i) => KIND[L.NODE_T[i].t];
+const kindOf = (G, i) => KIND[C.nodeT(G, i).t];
 U.kindOf = kindOf;
 const screens = U.screens;
 function artView() {
@@ -77,6 +77,7 @@ U.scenePanel = () => {
   const G = S.G, n = G.nodes[G.node], t = C.nodeT(G), r = C.R(G), w = wrapEl(), type = t.t;
   w.append(h('div', { class:'np-h' }, h('div', null, h('h3', null, C.nodeName(G)), h('small', null, kindOf(G, G.node) + ' · ' + r.short)), U.btn('Atlas', () => U.go('atlas'), { cls:'btn-t', a:'to-atlas' })));
   if (S.notes && S.notes.length) { S.notes.forEach(t => w.append(h('p', { class:'note' }, t))); }
+  const sb = U.strandedBlock(); if (sb) w.append(sb);
   if (G.batt <= 1 && G.fuel <= 2 && C.JOBT.indexOf(type) < 0) w.append(h('p', { class:'note' }, 'Running low on fuel and batteries. Look around the picture for supplies, or find a stop with people in it and take an odd job.'));
   if (type === 'vista' && n.vistaDone && n.vistaGain) w.append(h('p', { class:'note' }, 'You stop and look for a while. The atlas fills in: every stop shows its true name now. (Spirit +' + n.vistaGain + ')'));
   const wd = type === 'wonder' ? C.lampWonder(G, G.node) : null;

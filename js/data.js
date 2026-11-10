@@ -121,23 +121,35 @@ L.WEIGHT_LIGHT = 4; L.WEIGHT_HEAVY = 8; // 0-4 light, 5-7 normal, 8+ heavy (+1 f
 
 // ---------- animals you meet on the road ----------
 L.CRITTERS = {
-  gator:  { n:'Gator',  i:0, calm:20, pat:5, decay:6, likes:'food', big:1, scrap:'a gator, sunning itself on warm asphalt' },
-  boar:   { n:'Wild Boar', i:1, calm:18, pat:5, decay:8, likes:'food', scrap:'a boar, deciding about you' },
-  bear:   { n:'Black Bear', i:2, calm:15, pat:5, decay:7, likes:'food', big:1, scrap:'a bear with somewhere better to be' },
-  cougar: { n:'Cougar', i:3, calm:14, pat:5, decay:7, likes:'sound', scrap:'a cougar on a fence post' },
-  coyote: { n:'Coyote', i:4, calm:22, pat:6, decay:5, likes:'sound', scrap:'a coyote who has seen your type' },
-  steer:  { n:'Longhorn', i:5, calm:25, pat:6, decay:5, likes:'food', big:1, scrap:'a longhorn, in no hurry at all' },
+  gator:  { n:'Gator',  i:0, calm:20, pat:5, decay:6, likes:'food', big:1, scrap:'a gator, sunning itself on warm asphalt',
+            intro:['A gator is lying across the lane, sunning itself on warm asphalt.', 'A gator has come up out of the ditch and settled in the middle of the road, as if it paid for the lane.', 'There is a gator on the centerline, eyes half shut, and no sign it has noticed the van.'],
+            win:['The gator slides back into the ditch without any hurry.', 'It opens one eye, thinks about it, and heads for the water.', 'The gator goes off the shoulder in one long, slow motion.'] },
+  boar:   { n:'Wild Boar', i:1, calm:18, pat:5, decay:8, likes:'food', scrap:'a boar, deciding about you',
+            intro:['A boar stands in the road and looks at you as if deciding about you.', 'A boar has stopped at the edge of the lane, head low, in no mood to be hurried.', 'A boar and two stripes of piglets are halfway across. The boar has turned to face you.'],
+            win:['The boar turns and trots into the brush.', 'It huffs once and leads the others off the road.', 'The boar steps aside, offended, and lets you through.'] },
+  bear:   { n:'Black Bear', i:2, calm:15, pat:5, decay:7, likes:'food', big:1, scrap:'a bear with somewhere better to be',
+            intro:['A black bear is sitting at the side of the road with the look of someone with somewhere better to be.', 'A bear is walking down the middle of the road, unbothered, and has not left it.', 'There is a bear on the shoulder, going through a dropped bag of something.'],
+            win:['The bear loses interest and ambles into the trees.', 'It shuffles off the road and does not look back.', 'The bear takes its time, then is gone.'] },
+  cougar: { n:'Cougar', i:3, calm:14, pat:5, decay:7, likes:'sound', scrap:'a cougar on a fence post',
+            intro:['A cougar is stretched along a fence post beside the road, watching the van.', 'A cougar crosses the road in three long strides, then stops on the far side and looks back.', 'There is a cougar on the culvert, tail down, perfectly still.'],
+            win:['The cougar drops off the post and melts into the scrub.', 'It decides you are not worth the walk and goes.', 'The cougar leaves the way it came: without a sound.'] },
+  coyote: { n:'Coyote', i:4, calm:22, pat:6, decay:5, likes:'sound', scrap:'a coyote who has seen your type',
+            intro:['A coyote is trotting down the center line, and has seen your type before.', 'A coyote sits at the edge of the road, looking you over, in no hurry at all.', 'Two coyote eyes catch the headlights at the shoulder. It has not decided whether to cross.'],
+            win:['The coyote wanders off the road and waits in the grass until you are past.', 'It tilts its head, then trots away along the fence.', 'The coyote slips under the wire and is gone.'] },
+  steer:  { n:'Longhorn', i:5, calm:25, pat:6, decay:5, likes:'food', big:1, scrap:'a longhorn, in no hurry at all',
+            intro:['A longhorn is standing in the road, in no hurry at all.', 'A longhorn has lain down across both lanes and will not be argued with.', 'One longhorn, wide as the van, is chewing and looking at the horizon in the middle of the road.'],
+            win:['The longhorn heaves itself up and ambles away.', 'It steps off the road with great dignity.', 'The longhorn moves exactly as far as it has to.'] },
 };
 // Roadblock obstacles (top-down sprites): tags say what clears them
 L.OBST = {
-  log:     { n:'Fallen Log',      i:0, tags:['wood'] },
-  boulder: { n:'Boulder',         i:1, tags:['heavy'] },
-  barrel:  { n:'Rolled Barrels',  i:2, tags:['debris'] },
-  weed:    { n:'Tumbleweeds',     i:3, tags:['tangled'] },
-  pallet:  { n:'Pallet Pile',     i:4, tags:['wood','debris'] },
-  tire:    { n:'Truck Tire',      i:5, tags:['heavy'] },
-  tarp:    { n:'Tarp & Wire',     i:6, tags:['tangled','stuck'] },
-  puddle:  { n:'Washed-out Dip',  i:7, tags:['stuck'] },
+  log:     { n:'Fallen Log',      i:0, tags:['wood'],            reg:[0,1,2] },
+  boulder: { n:'Boulder',         i:1, tags:['heavy'],           reg:[2,3] },
+  barrel:  { n:'Rolled Barrels',  i:2, tags:['debris'],          reg:[0,1,2,3] },
+  weed:    { n:'Tumbleweeds',     i:3, tags:['tangled'],         reg:[2,3] },
+  pallet:  { n:'Pallet Pile',     i:4, tags:['wood','debris'],   reg:[0,1,2] },
+  tire:    { n:'Truck Tire',      i:5, tags:['heavy'],           reg:[1,2,3] },
+  tarp:    { n:'Tarp & Wire',     i:6, tags:['tangled','stuck'], reg:[0,1,3] },
+  puddle:  { n:'Washed-out Dip',  i:7, tags:['stuck'],           reg:[0,1,2] },
 };
 L.TAGSOLVE = { wood:['hatchet'], heavy:['winch','bullbar'], debris:['gloves','bullbar'], tangled:['rope','hatchet'], stuck:['rope','winch'] };
 L.TAGNAME = { wood:'Wood', heavy:'Heavy', debris:'Debris', tangled:'Tangled', stuck:'Stuck' };
@@ -207,7 +219,8 @@ L.REGIONS = [
 L.REG_NAMES = ['Florida','Gulf Coast','Texas','Mojave'];
 
 // shop prices etc
-L.PRICE = { fuel:[1,2,2,3], food:[1,1,2,2], part:[2,3,3,4] };
+L.PRICE = { fuel:[1,1,2,2], food:[1,1,1,2], part:[2,3,3,4] };
+L.JOBPAY = [3, 3, 4, 4];
 L.FUEL_CAP = 10; L.PACK = 8; L.HOURS = 8;
 L.MAXTOW = 5;
 

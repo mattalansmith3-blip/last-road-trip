@@ -138,10 +138,14 @@ U.drawFog = () => {
   x.globalCompositeOperation = 'destination-out'; x.fillStyle = 'rgba(0,0,0,.42)'; x.fillRect(0, 0, W, Hh);
   x.globalCompositeOperation = 'destination-out';
   const clear = (px, py, r, a) => { const g = x.createRadialGradient(px, py, r * .45, px, py, r); g.addColorStop(0, 'rgba(0,0,0,' + a + ')'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.beginPath(); x.arc(px, py, r, 0, 7); x.fill(); };
-  G.nodes.forEach((n, i) => { if (n.seen < 1) return; if (L.NODE_T[i].hidden && !G.hid[G.reg]) return; const p = C.pos(G, i); if (n.seen >= 2) clear(p[0] * W, p[1] * Hh, W * .42, 1); else clear(p[0] * W, p[1] * Hh, W * .17, .85); });
+  G.nodes.forEach((n, i) => { if (n.seen < 1) return; if (C.nodeT(G, i).hidden && !G.hid[G.reg]) return; const p = C.pos(G, i); if (n.seen >= 2) clear(p[0] * W, p[1] * Hh, W * .42, 1); else clear(p[0] * W, p[1] * Hh, W * .17, .85); });
   if (G.mapSeen[G.reg]) { x.globalCompositeOperation = 'destination-out'; x.fillStyle = 'rgba(0,0,0,.35)'; x.fillRect(0, 0, W, Hh); }
 };
 const wob = (a, b, k) => { const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = b[0] - a[0], dy = b[1] - a[1], s = ((k * 37) % 7 - 3) * .012; return [mx - dy * s * 3, my + dx * s * 3]; };
+U.strandedBlock = () => {
+  const G = S.G; if (!C.stranded(G)) return null;
+  return h('div', { class:'stranded' }, h('p', null, 'Low on fuel, and no work to be had here. Someone usually comes along.'), U.btn('Wait for a passerby', () => { const r = C.helpFromPasserby(G); if (!r) return; sfx('coin'); U.save(); U.sheet('Someone stops', h('div', null, h('p', null, 'A pickup slows down on the shoulder. The driver asks no questions, siphons a little fuel across, and wishes you luck. Two hours pass.'), U.gains([{ k:"fuel", n:r.fuel }])), { sticky:true, actions:[U.btn('Thank them', () => { U.closeSheet(); U.updateChrome(); if (S.screen === 'atlas') U.render(); }, { cls:'btn-r', a:'help-ok' })] }); }, { cls:'btn-r', sub:'2 hours · enough fuel for the next stop', a:'help' }));
+};
 U.driveTo = b => {
   if (S.busy) return; const G = S.G; const c = C.canGo(G, b); const issues = [];
   if (c.fuelShort > 0) issues.push('You need ' + c.cost.fuel + ' fuel and have ' + G.fuel + '. You would push the van the last stretch: +' + c.fuelShort * 2 + ' hours, +' + c.fuelShort + ' wear, Spirit −1.');
@@ -184,15 +188,17 @@ U.tow = (why, then) => {
 };
 screens.tow = a => {
   const G = S.G; const r = a.r;
-  return h('div', { class:'scr full tow' }, h('div', { class:'fullart towart' }, im('assets/big/tow.webp', 'towimg', 'A flatbed tow truck at dusk with the van chained on the back, and the dog waiting on the shoulder')),
-    h('div', { class:'fullcard' }, h('h1', null, 'A Tow'), h('p', null, a.msg), h('p', null, 'You wake at ' + C.nodeName(G, r.to) + '. ' + (r.free ? 'The blank plate on your dash does the talking: the tow is free this once.' : r.paid ? 'The fee: ' + r.paid + ' batteries.' : 'The driver does not charge you, since you have nothing to give.')), h('p', { class:'sm' }, 'Tows this trip: ' + G.tows + (G.gentle ? '. Gentle Mode has no limit.' : '. A sixth tow would end the trip.') + (r.topUp ? ' The driver tops up ' + r.topUp + ' fuel.' : '')),
+  return h('div', { class:'scr full tow' }, h('div', { class:'fullart towart' }, im(U.towArt(G), 'towimg', 'A flatbed tow truck at dusk with the van chained on the back, and the dog waiting on the shoulder')),
+    h('div', { class:'fullcard' }, h('h1', null, 'A Tow'), h('p', null, a.msg), h('p', null, 'You wake at ' + C.nodeName(G, r.to) + '. ' + (r.free ? 'The blank plate on your dash does the talking: the tow is free this once.' : r.paid ? 'The fee: ' + r.paid + ' batteries.' : 'The driver does not charge you, since you have nothing to give.')), h('p', { class:'sm towcount' }, U.towLine(G, a.over) + (r.topUp ? ' The driver tops up ' + r.topUp + ' fuel.' : '')),
       U.btn(a.over ? 'Continue' : 'Back on the road', () => { if (a.over) U.tripOver(); else if (a.then) { /* after tow the node changed; arrive */ S.ev = null; S.notes = []; U.go('scene'); } }, { cls:'btn-r', a:'tow-ok' })));
 };
+U.towLine = (G, over) => { const k = G.tows; if (G.gentle) return 'Tows this trip: ' + k + '. Gentle mode has no limit.'; if (over || k > L.MAXTOW) return 'That\'s six. This is the end of the road.'; if (k === L.MAXTOW) return 'Five tows. One more ends the trip.'; return k + ' of ' + L.MAXTOW + '. A sixth tow ends the trip.'; };
+U.towArt = G => 'assets/big/tow' + ({ 0:'_fl', 1:'_gulf' }[G.reg] || '') + '.webp';
 U.tripOver = () => { const G = S.G, m = S.meta; m.trips++; const keep = Object.keys(m.bp).length; G.ended = G.ended || 'tows'; save(); localStorage.removeItem('lrt2_run'); U.go('over'); };
 screens.over = () => { const G = S.G; return h('div', { class:'scr full' }, h('div', { class:'fullart' }, im('assets/big/title.webp', 'bgimg'), h('div', { class:'shade' })), h('div', { class:'fullcard' }, h('h1', null, 'The Trip Ends Here'), h('p', null, 'The van has been towed six times. Walt\'s flatbed takes you the rest of the way home, and nobody says very much.'), h('p', null, 'It is not wasted. Every blueprint, every lamp you lit at Sunspire, every Scrapbook page and every Mixtape stays with you. Next time you start with more.'), h('p', { class:'sm' }, 'You reached ' + C.R(G).n + ' on day ' + G.day + '.'), U.btn('Back to the title', () => { S.G = null; U.go('title'); }, { cls:'btn-r', a:'over-ok' }))); };
 U.restDay = () => {
-  const G = S.G; S.notes = []; C.newDay(G); G.food = Math.max(0, G.food - 1); G.spirit = 3; save();
-  U.sheet('A day of rest', h('p', null, 'You are too tired to drive safely. You park, put the dog in the shade and sleep through most of a day. It helps. (Spirit back to 3. A day and a meal gone.)'), { sticky:true, actions:[U.btn('Carry on', () => { U.closeSheet(); U.go('scene'); }, { cls:'btn-r' })] });
+  const G = S.G; S.notes = []; C.newDay(G); G.spirit = 3; save();
+  U.sheet('A day of rest', h('p', null, 'You are too tired to drive safely. You park, put the dog in the shade and sleep through most of a day. It helps. (Spirit back to 3. A day goes by, and the food lasts.)'), { sticky:true, actions:[U.btn('Carry on', () => { U.closeSheet(); U.go('scene'); }, { cls:'btn-r' })] });
 };
 U.doCamp = () => {
   const G = S.G; S.notes = []; const t = C.nodeT(G).t; const r = C.camp(G); sfx('soft'); S.ev = null;
@@ -206,11 +212,11 @@ screens.atlas = () => {
   const G = S.G, r = C.R(G), cur = G.node, sel = S.sel;
   const pins = [], routes = [];
   G.nodes.forEach((n, i) => {
-    if (n.seen < 1) return; if (L.NODE_T[i].hidden && !G.hid[G.reg]) return; const p = C.pos(G, i);
-    const known = C.typeKnown(G, i) || n.seen >= 2; const t = L.NODE_T[i];
-    pins.push(h('button', { class:'pin' + (i === cur ? ' cur' : '') + (i === sel ? ' sel' : '') + (n.seen >= 2 ? ' vis' : '') + (n.restored ? ' lit' : '') + (t.hidden ? ' hid' : ''), style:'left:' + p[0] * 100 + '%;top:' + p[1] * 100 + '%', 'data-n':i, 'data-a':'pin-' + i, onclick:() => U.pickNode(i) }, sp('pins', known ? C.pinIdx(G, i) : 8, 'pimg', ''), n.seen >= 2 ? h('span', { class:'plab' }, r.names[i]) : null));
+    if (n.seen < 1) return; if (C.nodeT(G, i).hidden && !G.hid[G.reg]) return; const p = C.pos(G, i);
+    const known = C.typeKnown(G, i) || n.seen >= 2; const t = C.nodeT(G, i);
+    pins.push(h('button', { class:'pin' + (i === cur ? ' cur' : '') + (i === sel ? ' sel' : '') + (n.seen >= 2 ? ' vis' : '') + (n.restored ? ' lit' : '') + (t.hidden ? ' hid' : ''), style:'left:' + p[0] * 100 + '%;top:' + p[1] * 100 + '%', 'data-n':i, 'data-a':'pin-' + i, onclick:() => U.pickNode(i) }, sp('pins', known ? C.pinIdx(G, i) : 8, 'pimg', ''), n.seen >= 2 ? h('span', { class:'plab' }, C.nodeName(G, i)) : null));
   });
-  L.EDGES.forEach((e, k) => { const a = G.nodes[e[0]], b = G.nodes[e[1]]; if (a.seen < 1 || b.seen < 1) return; if ((L.NODE_T[e[0]].hidden || L.NODE_T[e[1]].hidden) && !G.hid[G.reg]) return; if (a.seen < 2 && b.seen < 2) return; const p = C.pos(G, e[0]), q = C.pos(G, e[1]), w = wob(p, q, k + 1); const both = a.seen >= 2 && b.seen >= 2; const d = 'M' + p[0] * 300 + ' ' + p[1] * 400 + ' Q' + w[0] * 300 + ' ' + w[1] * 400 + ' ' + q[0] * 300 + ' ' + q[1] * 400; routes.push(h('path', { d, class:'rt' + (both ? ' vis' : '') + (e[0] === cur && e[1] === sel || e[1] === cur && e[0] === sel ? ' sel' : '') })); });
+  C.edges(G).forEach((e, k) => { const a = G.nodes[e[0]], b = G.nodes[e[1]]; if (a.seen < 1 || b.seen < 1) return; if ((C.nodeT(G, e[0]).hidden || C.nodeT(G, e[1]).hidden) && !G.hid[G.reg]) return; if (a.seen < 2 && b.seen < 2) return; const p = C.pos(G, e[0]), q = C.pos(G, e[1]), w = wob(p, q, k + 1); const both = a.seen >= 2 && b.seen >= 2; const d = 'M' + p[0] * 300 + ' ' + p[1] * 400 + ' Q' + w[0] * 300 + ' ' + w[1] * 400 + ' ' + q[0] * 300 + ' ' + q[1] * 400; routes.push(h('path', { d, class:'rt' + (both ? ' vis' : '') + (e[0] === cur && e[1] === sel || e[1] === cur && e[0] === sel ? ' sel' : '') })); });
   const cp = C.pos(G, cur);
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 300 400'); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('class', 'routes'); routes.forEach(p => { const e = document.createElementNS('http://www.w3.org/2000/svg', 'path'); for (const a of p.getAttributeNames()) e.setAttribute(a, p.getAttribute(a)); svg.append(e); });
   const map = h('div', { class:'map' }, im('assets/atlas/' + (r.id === 'mj' ? 'mojave' : r.id) + '.webp', 'atlas-img', r.n), h('canvas', { class:'fog' }), svg, pins, sp('van', 0, 'van', 'Marigold'));
@@ -224,17 +230,20 @@ U.nodePanel = () => {
   const G = S.G, r = C.R(G), cur = G.node, sel = S.sel, wrap = h('div', { class:'np' });
   if (sel == null) {
     const t = C.nodeT(G), here = C.nodeName(G, cur);
+    const sb0 = U.strandedBlock(); if (sb0) wrap.append(sb0);
     wrap.append(h('div', { class:'np-h' }, h('div', null, h('h3', null, here), h('small', null, 'You are here. ' + r.n)), U.btn('Look around', () => { U.go('scene'); }, { cls:'btn-t', a:'look-here' })),
-      h('p', { class:'hint' }, 'Tap a stop on the atlas to see what the drive will cost. Unknown stops are marked with a question mark; a viewpoint, binoculars or a map reveals them.'));
+      C.stranded(G) ? h('span') : h('p', { class:'hint' }, 'Tap a stop on the atlas to see what the drive will cost. Unknown stops are marked with a question mark; a viewpoint, binoculars or a map reveals them.'));
     const nb = C.nbrs(G, cur); if (!nb.length) wrap.append(h('p', null, 'No roads from here.'));
     return wrap;
   }
-  const n = G.nodes[sel], known = C.typeKnown(G, sel) || n.seen >= 2, t = L.NODE_T[sel]; const adj = C.nbrs(G, cur).indexOf(sel) >= 0; const c = C.edgeCost(G, cur, sel);
+  const n = G.nodes[sel], known = C.typeKnown(G, sel) || n.seen >= 2, t = C.nodeT(G, sel); const adj = C.nbrs(G, cur).indexOf(sel) >= 0; const c = C.edgeCost(G, cur, sel);
   const kind = known ? ({ town:'A small town', gas:'Gas station', stop:'Roadside stop', camp:'Campsite', vista:'Viewpoint', wonder:'A Wonder', house:'Abandoned house', trader:'Trading post', cross:'The Crossing' }[t.t]) : 'Unknown stop';
-  wrap.append(h('div', { class:'np-h' }, h('div', null, h('h3', null, n.seen >= 2 || known ? r.names[sel] : 'Somewhere ahead'), h('small', null, kind + (n.seen >= 2 ? ' · visited' : ''))),
-    adj ? U.btn('Drive', () => U.driveTo(sel), { cls:'btn-r', a:'drive' }) : U.btn('Too far', () => {}, { dis:true })),
+  wrap.append(h('div', { class:'np-h' }, h('div', null, h('h3', null, n.seen >= 2 || known ? C.nodeName(G, sel) : 'Somewhere ahead'), h('small', null, kind + (n.seen >= 2 ? ' · visited' : ''))),
+    adj ? U.btn('Drive', () => U.driveTo(sel), { cls:'btn-r', a:'drive', dis:!C.canGo(G, sel).ok, sub:C.canGo(G, sel).ok ? null : 'Needs ' + (c.fuel - G.fuel) + ' more fuel' }) : U.btn('Too far', () => {}, { dis:true })),
     adj ? h('div', { class:'costs' }, h('span', null, ico('clock'), c.hours + ' hours'), h('span', { class:G.fuel < c.fuel ? 'bad' : '' }, ico('fuel'), c.fuel + ' fuel (you have ' + G.fuel + ')'), c.hours > C.hoursLeft(G) ? h('span', { class:'bad' }, 'After dark') : null) : h('p', { class:'hint' }, 'Not connected to where you are. Drive to a neighbour first.'),
     G.wx !== 'sun' && adj ? h('p', { class:'hint' }, L.WEATHER_BY_ID[G.wx].n + ': ' + L.WEATHER_BY_ID[G.wx].d) : h('span'));
+  if (adj && !C.canGo(G, sel).ok) wrap.append(h('p', { class:'warn' }, 'You are ' + (c.fuel - G.fuel) + ' fuel short, and the van can only be pushed for 2. Buy fuel, take a job, or ask for help first.'));
+  const sb = U.strandedBlock(); if (sb) wrap.append(sb);
   return wrap;
 };
 U.screens = screens;
