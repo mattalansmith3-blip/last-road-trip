@@ -56,7 +56,9 @@ U.splitPanels = () => { document.querySelectorAll('.panel').forEach(p => {
   const bar = p.querySelector('.pin-act'); if (!bar) return;
   const sc = h('div', { class:'pscroll' }); while (p.firstChild) sc.append(p.firstChild); p.append(sc); p.classList.add('split'); p.append(bar); }); };
 U.scroller = p => (p && p.querySelector(':scope > .pscroll')) || p;
-U.scrollCue = () => { document.querySelectorAll('.panel').forEach(pp => { const p = U.scroller(pp); const upd = () => p.classList.toggle('more', p.scrollHeight - p.clientHeight - p.scrollTop > 10); if (!p.__cue) { p.__cue = 1; p.addEventListener('scroll', upd, { passive:true }); } upd(); setTimeout(upd, 300); }); };
+U.scrollCue = () => { document.querySelectorAll('.panel').forEach(pp => { const p = U.scroller(pp);
+  let cb = pp.querySelector(':scope > .cuebtn'); if (!cb) { cb = h('button', { class:'cuebtn', 'aria-label':'Scroll down', 'data-a':'scroll-more', onclick:e => { e.stopPropagation(); const q = U.scroller(pp); q.scrollBy({ top:Math.max(80, q.clientHeight * .8), behavior:'smooth' }); } }); cb.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 9l7 7 7-7" fill="none" stroke="#7a5a3e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>'; pp.append(cb); }
+  const upd = () => { const more = p.scrollHeight - p.clientHeight - p.scrollTop > 10; p.classList.toggle('more', more); cb.classList.toggle('on', more); const bar = pp.querySelector(':scope > .pin-act'); cb.style.bottom = (bar ? bar.offsetHeight + 8 : 10) + 'px'; }; if (!p.__cue) { p.__cue = 1; p.addEventListener('scroll', upd, { passive:true }); } upd(); setTimeout(upd, 300); }); };
 
 // ---------- toasts, sheets ----------
 let toastT = null;
@@ -194,17 +196,18 @@ screens.tow = a => {
 };
 U.towLine = (G, over) => { const k = G.tows; if (G.gentle) return 'Tows this trip: ' + k + '. Gentle mode has no limit.'; if (over || k > L.MAXTOW) return 'That\'s six. This is the end of the road.'; if (k === L.MAXTOW) return 'Five tows. One more ends the trip.'; return k + ' of ' + L.MAXTOW + '. A sixth tow ends the trip.'; };
 U.towArt = G => 'assets/big/tow' + ({ 0:'_fl', 1:'_gulf' }[G.reg] || '') + '.webp';
-U.tripOver = () => { const G = S.G, m = S.meta; m.trips++; const keep = Object.keys(m.bp).length; G.ended = G.ended || 'tows'; save(); localStorage.removeItem('lrt2_run'); U.go('over'); };
-screens.over = () => { const G = S.G; return h('div', { class:'scr full' }, h('div', { class:'fullart' }, im('assets/big/title.webp', 'bgimg'), h('div', { class:'shade' })), h('div', { class:'fullcard' }, h('h1', null, 'The Trip Ends Here'), h('p', null, 'The van has been towed six times. Walt\'s flatbed takes you the rest of the way home, and nobody says very much.'), h('p', null, 'It is not wasted. Every blueprint, every lamp you lit at Sunspire, every Scrapbook page and every Mixtape stays with you. Next time you start with more.'), h('p', { class:'sm' }, 'You reached ' + C.R(G).n + ' on day ' + G.day + '.'), U.btn('Back to the title', () => { S.G = null; U.go('title'); }, { cls:'btn-r', a:'over-ok' }))); };
+U.tripOver = () => { const G = S.G, m = S.meta; m.trips++; m.last = { reg:G.reg, day:G.day, won:false }; const keep = Object.keys(m.bp).length; G.ended = G.ended || 'tows'; save(); localStorage.removeItem('lrt2_run'); U.go('over'); };
+screens.over = () => { const G = S.G, here = C.R(G); return h('div', { class:'scr full' }, h('div', { class:'fullart' }, im('assets/big/title.webp', 'bgimg'), h('div', { class:'shade' })), h('div', { class:'fullcard' }, h('h1', null, 'The Trip Ends Here'), h('p', null, 'The van has been towed six times. Walt\'s flatbed takes you the rest of the way home, and nobody says very much.'), h('div', { class:'postcard sm' }, h('div', { class:'pc-note' }, h('p', { class:'hand' }, 'Day ' + G.day + '. We got as far as ' + here.short + '. The van is tired and so are we. Biscuit slept the whole way back, which I take as a vote of confidence. The road is still there.'), h('p', { class:'hand r' }, '— Marigold\'s glovebox'))), h('p', null, 'It is not wasted. Every blueprint, every lamp you lit at Sunspire, every Scrapbook page and every Mixtape stays with you. Next time you start with more.'), h('p', { class:'sm' }, 'You reached ' + C.R(G).n + ' on day ' + G.day + '.'), U.btn('Back to the title', () => { S.G = null; U.go('title'); }, { cls:'btn-r', a:'over-ok' }))); };
+U.hero = (i, cls) => sp('hero', i, 'hero ' + (cls || ''), 'The driver');
 U.restDay = () => {
   const G = S.G; S.notes = []; C.newDay(G); G.spirit = 3; save();
-  U.sheet('A day of rest', h('p', null, 'You are too tired to drive safely. You park, put the dog in the shade and sleep through most of a day. It helps. (Spirit back to 3. A day goes by, and the food lasts.)'), { sticky:true, actions:[U.btn('Carry on', () => { U.closeSheet(); U.go('scene'); }, { cls:'btn-r' })] });
+  U.sheet('A day of rest', h('div', { class:'herorow' }, U.hero(5), h('p', null, 'You are too tired to drive safely. You park, put the dog in the shade and sleep through most of a day. It helps. (Spirit back to 3. A day goes by, and the food lasts.)')), { sticky:true, actions:[U.btn('Carry on', () => { U.closeSheet(); U.go('scene'); }, { cls:'btn-r' })] });
 };
 U.doCamp = () => {
   const G = S.G; S.notes = []; const t = C.nodeT(G).t; const r = C.camp(G); sfx('soft'); S.ev = null;
   const wx = L.WEATHER_BY_ID[G.wx];
   const text = t === 'camp' ? 'A fire, a pot, the dog asleep against your leg. The day ends well.' : (t === 'stop' || t === 'town') ? 'You find a quiet corner behind the building and sleep in the van.' : C.has2(G, 'bag') ? 'You sleep rough, but the sleeping bag makes it fine.' : 'You sleep in the van on the shoulder of the road. Nobody sleeps well.';
-  U.sheet('Day ' + (G.day) + ' begins', h('div', null, h('p', null, text), r.lines.map(t => h('p', { class:'warn' }, t)), U.gains([{ k:'spirit', n:r.spirit }].concat(r.solar ? [{ k:'batt', n:1 }] : [])), h('p', null, sp('weather', wx.idx, 'wx-s', ''), ' Today: ' + wx.n + '. ' + wx.d)), { sticky:true, actions:[U.btn('Get going', () => { U.closeSheet(); if (G.spirit <= 0) U.restDay(); else U.go(S.screen === 'scene' ? 'scene' : 'atlas'); }, { cls:'btn-r', a:'camp-ok' })] });
+  U.sheet('Day ' + (G.day) + ' begins', h('div', null, h('div', { class:'herorow' }, U.hero(t === 'camp' ? 5 : 0), h('p', null, text)), r.lines.map(t => h('p', { class:'warn' }, t)), U.gains([{ k:'spirit', n:r.spirit }].concat(r.solar ? [{ k:'batt', n:1 }] : [])), h('p', null, sp('weather', wx.idx, 'wx-s', ''), ' Today: ' + wx.n + '. ' + wx.d)), { sticky:true, actions:[U.btn('Get going', () => { U.closeSheet(); if (G.spirit <= 0) U.restDay(); else U.go(S.screen === 'scene' ? 'scene' : 'atlas'); }, { cls:'btn-r', a:'camp-ok' })] });
 };
 
 // atlas screen
@@ -221,7 +224,7 @@ screens.atlas = () => {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 300 400'); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('class', 'routes'); routes.forEach(p => { const e = document.createElementNS('http://www.w3.org/2000/svg', 'path'); for (const a of p.getAttributeNames()) e.setAttribute(a, p.getAttribute(a)); svg.append(e); });
   const map = h('div', { class:'map' }, im('assets/atlas/' + (r.id === 'mj' ? 'mojave' : r.id) + '.webp', 'atlas-img', r.n), h('canvas', { class:'fog' }), svg, pins, sp('van', 0, 'van', 'Marigold'));
   const van = map.querySelector('.van'); van.style.left = cp[0] * 100 + '%'; van.style.top = cp[1] * 100 + '%';
-  const root = h('div', { class:'scr atlas' }, U.hud(), h('div', { class:'artcol' }, map, h('div', { class:'mapcap' }, r.short, h('small', null, ' · ' + C.nodeName(G, cur)))), h('div', { class:'panel' }, U.nodePanel()), U.nav('atlas'));
+  const root = h('div', { class:'scr atlas' }, U.hud(), h('div', { class:'artcol' }, im('assets/atlas/' + (r.id === 'mj' ? 'mojave' : r.id) + '.webp', 'atlas-bg', ''), map, h('div', { class:'mapcap' }, r.short, h('small', null, ' · ' + C.nodeName(G, cur)))), h('div', { class:'panel' }, U.nodePanel()), U.nav('atlas'));
   root.__after = () => { U.drawFog(); U.coach('hud'); };
   return root;
 };

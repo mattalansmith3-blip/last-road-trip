@@ -18,7 +18,16 @@ screens.title = () => {
   btns.push(U.btn(run ? 'Start a new trip' : 'Start the trip', () => { AU.init(); if (run) U.confirm('Start over?', 'Your trip in progress will be left behind. Blueprints, lamps, Scrapbook and Mixtapes are kept.', 'Start new trip', U.newTrip); else U.newTrip(); }, { cls:run ? 'btn-c' : 'btn-r', a:'newgame' }));
   btns.push(h('div', { class:'row2' }, U.btn('Sunspire · ' + lamps + '/12', () => { S.G = null; U.go('sunspire'); }, { cls:'btn-t', a:'t-sunspire' }), U.btn('Scrapbook', () => { U.go('book'); }, { cls:'btn-t', a:'t-book' })));
   btns.push(h('div', { class:'row2' }, U.btn(AU.muted ? 'Sound: off' : 'Sound: on', () => { AU.setMute(!AU.muted); U.render(); }, { a:'sound' }), U.btn(m.gentle ? 'Gentle mode: on' : 'Gentle mode: off', () => { m.gentle = !m.gentle; U.save(); U.render(); }, { a:'gentle' })));
-  return h('div', { class:'scr title' }, im('assets/big/title.webp', 'bgimg', ''), h('div', { class:'shade top' }), h('div', { class:'logo' }, h('div', { class:'l1' }, 'The Last'), h('div', { class:'l2' }, 'Road Trip'), h('div', { class:'l3' }, 'A van, a dog, and a long way west.')), h('div', { class:'tbtns' }, btns, m.gentle ? h('p', { class:'gm' }, 'Gentle mode: calmer animals, slower roads, no limit on tows.') : null));
+  return h('div', { class:'scr title' }, im('assets/big/title.webp', 'bgimg', ''), h('div', { class:'shade top' }), h('div', { class:'logo' }, h('div', { class:'l1' }, 'The Last'), h('div', { class:'l2' }, 'Road Trip'), h('div', { class:'l3' }, 'A van, a dog, and a long way west.'), U.titleHook(m)), h('div', { class:'tbtns' }, btns, m.gentle ? h('p', { class:'gm' }, 'Gentle mode: calmer animals, slower roads, no limit on tows.') : null));
+};
+U.titleHook = m => {
+  if (!m.trips) return null; const dark = L.REGIONS.map(r => ['A', 'B', 'C'].map(k => r.wonders[k]).find(w => !m.lamps[w.id])).filter(Boolean);
+  let t;
+  if (m.last && m.last.won) t = dark.length ? 'You made it to Sunspire. The ' + dark[0].n + ' is still dark.' : 'Every lamp at Sunspire is lit. The road is yours.';
+  else if (m.last) t = 'The last trip ended in ' + L.REGIONS[m.last.reg].short + '. Everything you earned came with you.';
+  else t = dark.length ? 'The ' + dark[0].n + ' is still dark.' : 'Every lamp is lit.';
+  const more = (m.trips >= 1 ? ' People on the road remember you now.' : '');
+  return h('div', { class:'hook' }, t + more);
 };
 U.newTrip = () => {
   const G = S.G = C.newGame(S.meta, {}); C.arrive(G); S.sel = null; S.ev = null; S.notes = []; U.save();

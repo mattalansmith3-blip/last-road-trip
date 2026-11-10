@@ -108,7 +108,7 @@ body.land .hud{padding:3px 6px}body.land .chip .ico{width:18px;height:18px}body.
 /* sticky header and pinned actions, scroll cue */
 .panel .np-h{position:sticky;top:0;z-index:4;margin:-10px -12px 8px;padding:10px 12px 6px;background:#eadcc0 url(../assets/big/paper.webp) center/cover;border-bottom:1px solid rgba(74,52,38,.18)}
 .pin-act{position:sticky;bottom:0;z-index:4;padding:8px 0 4px;margin-bottom:-4px;background:linear-gradient(to top,#eadcc0 70%,rgba(234,220,192,0))}
-.panel::after,.pscroll::after{content:"";display:block;position:sticky;bottom:0;height:34px;margin:-34px -12px 0;pointer-events:none;opacity:0;transition:opacity .2s;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 9l7 7 7-7' fill='none' stroke='%237a5a3e' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center 8px/20px,linear-gradient(to top,rgba(234,220,192,.97) 35%,rgba(234,220,192,0))}
+.panel::after,.pscroll::after{content:"";display:block;position:sticky;bottom:0;height:30px;margin:-30px -12px 0;pointer-events:none;opacity:0;transition:opacity .2s;background:linear-gradient(to top,rgba(234,220,192,.92) 30%,rgba(234,220,192,0))}
 .panel.more::after,.pscroll.more::after{opacity:1}
 .panel.split{display:flex;flex-direction:column;overflow:hidden;padding:0}.panel.split::after{display:none}.pscroll{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 12px 8px;scroll-padding:70px 0 20px}.panel.split .pin-act{position:static;flex:none;margin:0;padding:7px 12px calc(7px + env(safe-area-inset-bottom,0px)*0);background:#eadcc0 url(../assets/big/paper.webp) center/cover;border-top:1px solid rgba(74,52,38,.25);box-shadow:0 -4px 8px rgba(58,42,32,.12)}
 body .pin-act.acts{display:flex;gap:8px}
@@ -146,3 +146,22 @@ body.land .scr.enc .panel .btn{border-width:9px;min-height:42px;margin:4px 0}bod
 .towcount{font-weight:700;color:#7a3b25}
 .ccready .steptag{position:static;display:inline-block;margin:0 0 8px}
 .stranded .btn{min-height:46px;padding:6px 10px}.stranded .btn small{font-size:11.5px}
+
+.compbeat{display:flex;gap:10px;align-items:center;background:rgba(255,248,230,.55);border-left:4px solid #c4553a;border-radius:6px;padding:6px 10px;margin:6px 0}.compbeat .cbi{width:46px;height:46px;flex:none}.compbeat p{margin:0;font-size:13.5px;line-height:1.3}
+.wonderhint{margin:0 0 6px}
+.hook{margin:10px auto 0;max-width:300px;font-family:Caveat,cursive;font-size:22px;line-height:1.1;color:#ffe9c2;text-shadow:0 2px 8px rgba(40,15,8,.7)}
+
+.panel{position:relative}
+.cuebtn{position:absolute;right:10px;bottom:10px;width:44px;height:44px;border-radius:50%;border:2px solid #7a5a3e;background:#f3e6c8;box-shadow:0 2px 6px rgba(40,20,10,.35);z-index:6;display:none;align-items:center;justify-content:center;padding:0}
+.cuebtn.on{display:flex}
+.cuebtn svg{width:22px;height:22px}
+body.land .pin-act.opts{display:flex;flex-direction:column;gap:5px}
+body.land .pin-act.opts .btn .sub{display:block;font-size:11px;line-height:1.1}
+body.land .pin-act.opts .btn{min-height:38px}
+body.land .evc .evh{gap:8px}body.land .evc .evp{width:34px;height:34px}body.land .evc h3{font-size:18px;margin:0}body.land .evc p{font-size:13px;line-height:1.25;margin:2px 0}
+body.land .evon>.desc{display:none}
+body.land .evc{padding:6px 8px;margin:4px 0}
+body.land .pin-act.opts{gap:3px}body.land .pin-act.opts .btn{min-height:34px}body.land .pin-act.opts .btn .bl{font-size:15px}
+.atlas-bg{position:absolute;left:-24px;top:-24px;width:calc(100% + 48px);height:calc(100% + 48px);max-width:none;object-fit:cover;filter:blur(18px) saturate(.9) brightness(.82);pointer-events:none}.artcol .map{position:relative;z-index:1}
+.herorow{display:flex;gap:10px;align-items:flex-end}.herorow p{margin:0 0 6px;flex:1}.hero{height:92px;width:auto;flex:none;object-fit:contain}
+body.land .hero{height:64px}
