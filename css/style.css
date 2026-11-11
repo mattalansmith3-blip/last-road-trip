@@ -165,3 +165,16 @@ body.land .pin-act.opts{gap:3px}body.land .pin-act.opts .btn{min-height:34px}bod
 .atlas-bg{position:absolute;left:-24px;top:-24px;width:calc(100% + 48px);height:calc(100% + 48px);max-width:none;object-fit:cover;filter:blur(18px) saturate(.9) brightness(.82);pointer-events:none}.artcol .map{position:relative;z-index:1}
 .herorow{display:flex;gap:10px;align-items:flex-end}.herorow p{margin:0 0 6px;flex:1}.hero{height:92px;width:auto;flex:none;object-fit:contain}
 body.land .hero{height:64px}
+
+.scr{position:relative}
+.cuebtn{position:absolute;right:auto;bottom:auto;width:40px;height:40px;z-index:8}
+.cuebtn svg{width:20px;height:20px}
+body.land .pscroll.more{padding-right:54px}
+body.land #toasts{top:auto;bottom:64px;left:0;right:auto;width:46%}
+body.land .hook{font-size:17px;line-height:1.1;margin:4px 0 0;max-width:none;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+body.land .scenep .acts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+body.land .scenep .acts>p,body.land .scenep .acts>.stranded{grid-column:1/-1}
+body.land .scenep .acts .btn{margin:0;min-height:44px}
+body.land .scenep .acts .btn .sub{font-size:11px;line-height:1.1}
+.pin::after{content:"";position:absolute;inset:-12px}
+body.land .pin{width:54px;height:54px}body.land .pin .pimg{width:40px;height:40px}

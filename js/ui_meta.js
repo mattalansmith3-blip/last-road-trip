@@ -20,18 +20,19 @@ screens.title = () => {
   btns.push(h('div', { class:'row2' }, U.btn(AU.muted ? 'Sound: off' : 'Sound: on', () => { AU.setMute(!AU.muted); U.render(); }, { a:'sound' }), U.btn(m.gentle ? 'Gentle mode: on' : 'Gentle mode: off', () => { m.gentle = !m.gentle; U.save(); U.render(); }, { a:'gentle' })));
   return h('div', { class:'scr title' }, im('assets/big/title.webp', 'bgimg', ''), h('div', { class:'shade top' }), h('div', { class:'logo' }, h('div', { class:'l1' }, 'The Last'), h('div', { class:'l2' }, 'Road Trip'), h('div', { class:'l3' }, 'A van, a dog, and a long way west.'), U.titleHook(m)), h('div', { class:'tbtns' }, btns, m.gentle ? h('p', { class:'gm' }, 'Gentle mode: calmer animals, slower roads, no limit on tows.') : null));
 };
+const nm = n => /^the /i.test(n) ? n : 'The ' + n;
 U.titleHook = m => {
   if (!m.trips) return null; const dark = L.REGIONS.map(r => ['A', 'B', 'C'].map(k => r.wonders[k]).find(w => !m.lamps[w.id])).filter(Boolean);
   let t;
-  if (m.last && m.last.won) t = dark.length ? 'You made it to Sunspire. The ' + dark[0].n + ' is still dark.' : 'Every lamp at Sunspire is lit. The road is yours.';
+  if (m.last && m.last.won) t = dark.length ? 'You made it to Sunspire. ' + nm(dark[0].n) + ' is still dark.' : 'Every lamp at Sunspire is lit. The road is yours.';
   else if (m.last) t = 'The last trip ended in ' + L.REGIONS[m.last.reg].short + '. Everything you earned came with you.';
-  else t = dark.length ? 'The ' + dark[0].n + ' is still dark.' : 'Every lamp is lit.';
+  else t = dark.length ? nm(dark[0].n) + ' is still dark.' : 'Every lamp is lit.';
   const more = (m.trips >= 1 ? ' People on the road remember you now.' : '');
   return h('div', { class:'hook' }, t + more);
 };
 U.newTrip = () => {
-  const G = S.G = C.newGame(S.meta, {}); C.arrive(G); S.sel = null; S.ev = null; S.notes = []; U.save();
-  U.sheet('A postcard from Sunspire', h('div', null, h('div', { class:'postcard sm' }, h('div', { class:'pc-note' }, h('p', { class:'hand' }, 'The lamps are in good shape. We only need people to come and turn them on.'), h('p', { class:'hand r' }, '— Ines, Sunspire Park'))), h('p', null, 'It is the first mail in four years. You pack the van (her name is Marigold), whistle for Biscuit and point her west. Four stretches of road lie between you and the coast.'), h('p', { class:'sm' }, 'Along the way, restore Wonders: each one lights a lamp at Sunspire that stays lit on every future trip.')), { sticky:true, actions:[U.btn('Hit the road', () => { U.closeSheet(); U.go('scene'); }, { cls:'btn-r', a:'intro-ok' })] });
+  const G = S.G = C.newGame(S.meta, {}); C.arrive(G); const again = (S.meta.trips || 0) >= 1 && C.ident(G, 0) !== 0; S.sel = null; S.ev = null; S.notes = []; U.save();
+  U.sheet('A postcard from Sunspire', h('div', null, h('div', { class:'postcard sm' }, h('div', { class:'pc-note' }, h('p', { class:'hand' }, again ? (C.lamps(S.meta) ? 'The lamps you lit are still on. People come out onto the roof to look at them. There are more waiting.' : 'We kept the porch light on for you. The lamps are ready whenever you are.') : 'The lamps are in good shape. We only need people to come and turn them on.'), h('p', { class:'hand r' }, '— Ines, Sunspire Park'))), h('p', null, again ? 'You whistle for Biscuit and point Marigold west again. This time the road begins at ' + C.nodeName(G, 0) + ', so the first day will look different. Four stretches of road lie ahead.' : 'It is the first mail in four years. You pack the van (her name is Marigold), whistle for Biscuit and point her west. Four stretches of road lie between you and the coast.'), h('p', { class:'sm' }, 'Along the way, restore Wonders: each one lights a lamp at Sunspire that stays lit on every future trip.')), { sticky:true, actions:[U.btn('Hit the road', () => { U.closeSheet(); U.go('scene'); }, { cls:'btn-r', a:'intro-ok' })] });
 };
 // ---------- the van ----------
 const SLOTPOS = { roof:[50, 9], front:[93, 58], wheels:[69, 86], rear:[5, 52], side:[48, 50], cab:[78, 33] };

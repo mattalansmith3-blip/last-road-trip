@@ -56,9 +56,9 @@ U.splitPanels = () => { document.querySelectorAll('.panel').forEach(p => {
   const bar = p.querySelector('.pin-act'); if (!bar) return;
   const sc = h('div', { class:'pscroll' }); while (p.firstChild) sc.append(p.firstChild); p.append(sc); p.classList.add('split'); p.append(bar); }); };
 U.scroller = p => (p && p.querySelector(':scope > .pscroll')) || p;
-U.scrollCue = () => { document.querySelectorAll('.panel').forEach(pp => { const p = U.scroller(pp);
-  let cb = pp.querySelector(':scope > .cuebtn'); if (!cb) { cb = h('button', { class:'cuebtn', 'aria-label':'Scroll down', 'data-a':'scroll-more', onclick:e => { e.stopPropagation(); const q = U.scroller(pp); q.scrollBy({ top:Math.max(80, q.clientHeight * .8), behavior:'smooth' }); } }); cb.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 9l7 7 7-7" fill="none" stroke="#7a5a3e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>'; pp.append(cb); }
-  const upd = () => { const more = p.scrollHeight - p.clientHeight - p.scrollTop > 10; p.classList.toggle('more', more); cb.classList.toggle('on', more); const bar = pp.querySelector(':scope > .pin-act'); cb.style.bottom = (bar ? bar.offsetHeight + 8 : 10) + 'px'; }; if (!p.__cue) { p.__cue = 1; p.addEventListener('scroll', upd, { passive:true }); } upd(); setTimeout(upd, 300); }); };
+U.scrollCue = () => { document.querySelectorAll('.panel').forEach(pp => { const p = U.scroller(pp); const root = pp.closest('.scr') || pp.parentElement;
+  let cb = root.querySelector(':scope > .cuebtn'); if (!cb) { cb = h('button', { class:'cuebtn', 'aria-label':'Scroll down', 'data-a':'scroll-more', onclick:e => { e.stopPropagation(); const q = U.scroller(pp); q.scrollBy({ top:Math.max(80, q.clientHeight * .8), behavior:'smooth' }); } }); cb.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 9l7 7 7-7" fill="none" stroke="#7a5a3e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>'; root.append(cb); }
+  const upd = () => { const more = p.scrollHeight - p.clientHeight - p.scrollTop > 10; p.classList.toggle('more', more); cb.classList.toggle('on', more); const bar = pp.querySelector(':scope > .pin-act'); const pr = pp.getBoundingClientRect(), rr = root.getBoundingClientRect(); const sz = cb.offsetWidth || 40; cb.style.left = (pr.right - rr.left - sz - 8) + 'px'; cb.style.top = (pr.bottom - rr.top - sz - 8 - (bar ? bar.offsetHeight : 0)) + 'px'; cb.style.bottom = 'auto'; cb.style.right = 'auto'; }; if (!p.__cue) { p.__cue = 1; p.addEventListener('scroll', upd, { passive:true }); } upd(); setTimeout(upd, 300); }); };
 
 // ---------- toasts, sheets ----------
 let toastT = null;
@@ -206,7 +206,7 @@ U.restDay = () => {
 U.doCamp = () => {
   const G = S.G; S.notes = []; const t = C.nodeT(G).t; const r = C.camp(G); sfx('soft'); S.ev = null;
   const wx = L.WEATHER_BY_ID[G.wx];
-  const text = t === 'camp' ? 'A fire, a pot, the dog asleep against your leg. The day ends well.' : (t === 'stop' || t === 'town') ? 'You find a quiet corner behind the building and sleep in the van.' : C.has2(G, 'bag') ? 'You sleep rough, but the sleeping bag makes it fine.' : 'You sleep in the van on the shoulder of the road. Nobody sleeps well.';
+  const text = t === 'camp' ? 'A fire, a pot, the dog asleep against your leg. The day ends well.' : (t === 'stop' || t === 'town') ? 'You find a quiet corner behind the building and sleep in the van.' : (t === 'gas' || t === 'trader') ? 'You park under the canopy light, away from the pumps, and sleep in the van.' : C.has2(G, 'bag') ? 'You sleep rough, but the sleeping bag makes it fine.' : 'You sleep in the van on the shoulder of the road. Nobody sleeps well.';
   U.sheet('Day ' + (G.day) + ' begins', h('div', null, h('div', { class:'herorow' }, U.hero(t === 'camp' ? 5 : 0), h('p', null, text)), r.lines.map(t => h('p', { class:'warn' }, t)), U.gains([{ k:'spirit', n:r.spirit }].concat(r.solar ? [{ k:'batt', n:1 }] : [])), h('p', null, sp('weather', wx.idx, 'wx-s', ''), ' Today: ' + wx.n + '. ' + wx.d)), { sticky:true, actions:[U.btn('Get going', () => { U.closeSheet(); if (G.spirit <= 0) U.restDay(); else U.go(S.screen === 'scene' ? 'scene' : 'atlas'); }, { cls:'btn-r', a:'camp-ok' })] });
 };
 

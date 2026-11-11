@@ -5,7 +5,7 @@ const screens = U.screens;
 const roadSrc = G => 'assets/road/' + (C.R(G).id === 'mj' ? 'mojave' : C.R(G).id) + '.webp';
 U.startEnc = (kind, then, opts) => {
   const G = S.G; opts = opts || {}; G.stats.enc++; S.encThen = then; S.encOpts = opts; S.encLog = ''; G.encCtx = { thenKind:opts.thenKind || 'scene', opts:{ crossing:opts.crossing, step:opts.step, of:opts.of, who:opts.who, voluntary:opts.voluntary, thenKind:opts.thenKind } };
-  if (kind === 'standoff') G.enc = C.sfNew(G, opts.crossing); else if (kind === 'roadblock') G.enc = C.rbNew(G); else if (kind === 'haggle') G.enc = C.hgNew(G, opts.who); else G.enc = C.ccNew(G, opts.crossing ? C.R(G).cross.len : null, opts.crossing);
+  if (kind === 'standoff') G.enc = C.sfNew(G, opts.crossing); else if (kind === 'roadblock') G.enc = C.rbNew(G, opts.crossing); else if (kind === 'haggle') G.enc = C.hgNew(G, opts.who); else G.enc = C.ccNew(G, opts.crossing ? C.R(G).cross.len : null, opts.crossing);
   U.go('enc');
 };
 U.encFail = (kind) => {
@@ -27,7 +27,7 @@ function ringSvg(calm) {
 }
 function standoff(st) {
   const G = S.G, c = L.CRITTERS[st.cid]; const pips = []; const patMax = Math.max(st.pat, c.pat + 1 + (G.gentle ? 1 : 0)); for (let i = 0; i < patMax; i++) pips.push(h('span', { class:'pawp' + (i < st.pat ? '' : ' gone') }));
-  const art = h('div', { class:'art encart' }, h('div', { class:'art-in' }, im(roadSrc(G), 'scene-img', ''), h('div', { class:'critwrap' }, ringSvg(st.calm), h('div', { class:'gshadow' }), sp('wild', c.i, 'crit' + (st.calm >= 70 ? ' calm' : ''), c.n)), h('div', { class:'calmtxt' }, h('b', null, Math.min(100, Math.round(st.calm)) + '%'), ' calm'), h('div', { class:'pawps', title:'Patience' }, h('small', null, 'Patience: ' + st.pat + ' left'), pips)), stepTag());
+  const art = h('div', { class:'art encart' }, h('div', { class:'art-in' }, im(roadSrc(G), 'scene-img', ''), h('div', { class:'critwrap' }, ringSvg(st.calm), h('div', { class:'gshadow' }), sp('wild', c.i, 'crit' + (st.calm >= 70 ? ' calm' : ''), c.n)), h('div', { class:'calmtxt' }, h('b', null, Math.min(100, Math.round(st.calm)) + '%'), ' calm'), h('div', { class:'pawps', title:'Patience' }, h('small', null, st.mercy && st.pat === 1 ? 'One more try. It is nearly there.' : 'Patience: ' + st.pat + ' left'), pips)), stepTag());
   const acts = C.sfActions(G, st).map(a => U.btn(a.label, () => doStand(st, a.id), { dis:!!a.dis, sub:a.dis || a.sub, a:'sf-' + a.id, cls:a.id === 'honk' ? 'btn-c warnbtn' : a.id === 'back' ? 'btn-c' : 'btn-t' }));
   const hint = c.likes === 'food' ? 'It keeps looking at your supplies.' : 'Its ears keep turning toward every small sound.';
   const root = h('div', { class:'scr enc' }, U.hud(), h('div', { class:'artcol' }, art), h('div', { class:'panel' }, h('div', { class:'np' }, h('div', { class:'np-h' }, h('div', null, h('h3', null, 'A ' + c.n + ' in the road'), h('small', null, 'Standoff · fill the calm ring before patience runs out. Calm fades a little each turn.'))), h('p', { class:'desc' }, S.encLog || (c.intro[st.ix % c.intro.length] + ' ' + hint)), h('div', { class:'acts' }, acts))), U.nav('enc'));
@@ -80,13 +80,15 @@ function haggle(st) {
 function closecall(st) {
   const G = S.G; const cc = U.cc = { st, state:'ready', lane:1, t:0, hits:0, hitSet:{}, started:0, clean:0 };
   const road = h('div', { class:'ccroad' }, h('div', { class:'tilebg' }), h('div', { class:'lanes' }, [0, 1, 2].map(i => h('i', { class:'ln', 'data-l':i }))), h('div', { class:'ccobs' }), sp('van', 1, 'ccvan', 'van'));
-  const bar = h('div', { class:'ccbar' }, h('div', { class:'cch' }, 'Hits: ', h('b', { class:'hitn' }, '0'), st.crossing ? ' of ' + st.tol + ' allowed' : ' · each hit adds wear'), h('div', { class:'ccsub' }, st.beat ? 'Keep to the beat.' : '', ' ', G.wx === 'rain' && st.slick ? 'Wet road: slippery.' : ''));
-  const ready = h('div', { class:'ccready' }, stepTag(), h('h2', null, st.crossing ? C.R(G).cross.n : 'Close call'), h('p', null, 'Swipe, or tap the left or right side of the screen, to change lanes. Dodge what is in the road. A green glow marks the lane that is clear. ' + (st.crossing ? 'You can take ' + st.tol + ' hits. One more than that and the crossing beats you, but the next try is a little easier.' : 'One hit is free. Two or more cost wear, and a clean run pays something back.')), G.pass.indexOf('rabbit') >= 0 ? h('p', { class:'sm' }, 'The jackrabbit is on the dash. It will forgive one hit.') : null, U.btn('Go', () => startCC(cc, road, ready), { cls:'btn-r', a:'cc-go' }));
+  const bar = h('div', { class:'ccbar' }, h('div', { class:'cch' }, 'Hits: ', h('b', { class:'hitn' }, '0'), st.crossing ? ' of ' + (st.tol - st.forgive) + ' allowed' : ' · two or more add wear', h('small', { class:'forg' }, '')), h('div', { class:'ccsub' }, st.beat ? 'Keep to the beat.' : '', ' ', G.wx === 'rain' && st.slick ? 'Wet road: slippery.' : ''));
+  const ready = h('div', { class:'ccready' }, stepTag(), h('h2', null, st.crossing ? C.R(G).cross.n : 'Close call'), h('p', null, 'Swipe, or tap the left or right side of the screen, to change lanes. Dodge what is in the road. A green glow marks the lane that is clear. ' + (st.crossing ? 'You can take ' + st.tol + ' hits. One more than that and the crossing beats you, but the next try is a little easier.' : 'One hit is free. Two or more cost wear, and a clean run pays something back.')), G.pass.indexOf('rabbit') >= 0 ? h('p', { class:'sm' }, 'The jackrabbit is on the dash. It will forgive one hit.') : null, st.crossing && G.wear >= 6 ? h('p', { class:'sm warn' }, 'Wear is ' + G.wear + ' of 10. A rough run can leave her at 9, and no more.') : null, U.btn('Go', () => startCC(cc, road, ready), { cls:'btn-r', a:'cc-go' }));
   const wrap = h('div', { class:'scr cc' }, bar, road, ready);
   wrap.__after = () => { const w = road.clientWidth; layoutCC(cc, road); };
   const lane = d => { if (cc.state !== 'run') return; const n = Math.max(0, Math.min(2, cc.lane + d)); if (n !== cc.lane) { cc.lane = n; sfx('swipe'); placeVan(cc, road); } };
-  let sx = null; road.addEventListener('pointerdown', e => { sx = e.clientX; cc.sx = e.clientX; });
-  road.addEventListener('pointerup', e => { if (sx == null) return; const dx = e.clientX - sx; sx = null; if (Math.abs(dx) > 28) lane(dx > 0 ? 1 : -1); else { const r = road.getBoundingClientRect(); lane(e.clientX < r.left + r.width / 2 ? -1 : 1); } });
+  let sx = null, swiped = false; road.addEventListener('pointerdown', e => { sx = e.clientX; swiped = false; cc.sx = e.clientX; });
+  road.addEventListener('pointermove', e => { if (sx == null || swiped) return; const dx = e.clientX - sx; if (Math.abs(dx) > 22) { swiped = true; lane(dx > 0 ? 1 : -1); } });
+  road.addEventListener('pointercancel', () => { sx = null; });
+  road.addEventListener('pointerup', e => { if (sx == null) return; const dx = e.clientX - sx; sx = null; if (swiped) { swiped = false; return; } if (Math.abs(dx) > 22) lane(dx > 0 ? 1 : -1); else { const r = road.getBoundingClientRect(); lane(e.clientX < r.left + r.width / 2 ? -1 : 1); } });
   cc.lane_ = lane; cc.road = road;
   document.onkeydown = e => { if (e.key === 'ArrowLeft') lane(-1); if (e.key === 'ArrowRight') lane(1); };
   return wrap;
@@ -102,7 +104,7 @@ function startCC(cc, road, ready) {
   const tick = now => {
     if (cc.state !== 'run' || !document.body.contains(road)) return; const t = (now - cc.started) / 1000;
     road.querySelector('.tilebg').style.backgroundPositionY = (t * cc.speed) % (cc.W * 1.333) + 'px';
-    cc.els.forEach(o => { const y = cc.vanY - (o.row.t - t) * cc.speed; o.e.style.transform = 'translate(-50%,' + y + 'px)'; if (!o.done && y > cc.vanY - cc.H * .075 && y < cc.vanY + cc.H * .075) { if (cc.lane === o.li) { o.done = true; o.hit = true; cc.hits++; sfx('thud'); o.e.classList.add('hit'); road.classList.add('shake'); setTimeout(() => road.classList.remove('shake'), 250); const hn = $('.hitn'); if (hn) hn.textContent = cc.hits; } } if (!o.done && y > cc.vanY + cc.H * .08) o.done = true; });
+    cc.els.forEach(o => { const y = cc.vanY - (o.row.t - t) * cc.speed; o.e.style.transform = 'translate(-50%,' + y + 'px)'; if (!o.done && y > cc.vanY - cc.H * .075 && y < cc.vanY + cc.H * .075) { if (cc.lane === o.li) { o.done = true; o.hit = true; cc.hits++; sfx('thud'); o.e.classList.add('hit'); road.classList.add('shake'); setTimeout(() => road.classList.remove('shake'), 250); const hn = $('.hitn'); if (hn) hn.textContent = Math.max(0, cc.hits - st.forgive); const fg = $('.forg'); if (fg && st.forgive && cc.hits > 0) fg.textContent = ' · the jackrabbit forgave ' + Math.min(cc.hits, st.forgive); } } if (!o.done && y > cc.vanY + cc.H * .08) o.done = true; });
     let nxt = null; st.rows.forEach(r => { const dt = r.t - t; if (dt > -.2 && dt < 1.6 && (!nxt || dt < nxt.dt)) nxt = { dt, r }; }); const fl = nxt ? (nxt.r.free != null ? nxt.r.free : nxt.r.lanes.indexOf(0)) : -1; road.querySelectorAll('.ln').forEach((e, i) => e.classList.toggle('safe', i === fl && nxt && nxt.r.lanes.some(Boolean) && nxt.r.lanes[i] === 0));
     if (t > st.len) return endCC(cc); requestAnimationFrame(tick);
   };
@@ -111,8 +113,8 @@ function startCC(cc, road, ready) {
 U.stopLoops = () => { if (U.cc && U.cc.state === 'run') U.cc.state = 'stopped'; document.onkeydown = null; };
 function endCC(cc) {
   cc.state = 'done'; const G = S.G, st = cc.st; const f = C.ccFinish(G, st, cc.hits, st.crossing); const fail = f.fail; sfx(fail ? 'lose' : 'win');
-  const msg = cc.hits === 0 ? 'A clean run. Not a scratch on her.' : fail ? cc.hits + ' hits is more than the ' + st.tol + ' this crossing allows. Marigold limps to the shoulder.' : cc.hits + (cc.hits === 1 ? ' hit' : ' hits') + '. Marigold rattles, but she holds.';
-  U.sheet(fail ? 'Not this time' : 'Through', h('div', null, h('p', null, msg), f.lines.map(t => h('p', null, t)), f.fx && f.fx.length ? U.gains(f.fx.filter(o => o.k !== 'full')) : null, h('p', { class:'sm' }, cc.hits > 0 ? (cc.hits === 1 ? 'A single scrape leaves no mark.' : 'Wear +2') + (cc.hits > 2 ? ', Spirit −1' : '') : '')), { sticky:true, actions:[U.btn('Continue', () => { U.closeSheet(); if (fail) U.encFail('closecall'); else if (G.wear >= 10) U.breakdown(() => U.encDone()); else U.encDone(); }, { cls:'btn-r', a:'enc-ok' })] });
+  const msg = cc.hits === 0 ? 'A clean run. Not a scratch on her.' : fail ? (cc.hits - st.forgive) + ' counted hits is more than the ' + (st.tol - st.forgive) + ' this crossing allows. Marigold limps to the shoulder.' : cc.hits + (cc.hits === 1 ? ' hit' : ' hits') + (st.forgive ? ' (' + Math.min(cc.hits, st.forgive) + ' forgiven by the jackrabbit)' : '') + '. Marigold rattles, but she holds.';
+  U.sheet(fail ? 'Not this time' : 'Through', h('div', null, h('p', null, msg), f.lines.map(t => h('p', null, t)), f.fx && f.fx.length ? U.gains(f.fx.filter(o => o.k !== 'full')) : null, h('p', { class:'sm' }, f.eff > 0 ? (f.eff === 1 ? 'A single scrape leaves no mark.' : 'Wear +2') + (f.eff > 2 ? ', Spirit −1' : '') : (cc.hits > 0 ? 'No wear. The jackrabbit took the hit.' : ''))), { sticky:true, actions:[U.btn('Continue', () => { U.closeSheet(); if (fail) U.encFail('closecall'); else if (G.wear >= 10) U.breakdown(() => U.encDone()); else U.encDone(); }, { cls:'btn-r', a:'enc-ok' })] });
 }
 // test hook: finish the close call as a player of the given skill
 U.ccAuto = skill => { const cc = U.cc; if (!cc || cc.state === 'done') return; cc.state = 'done'; cc.hits = C.ccSim(S.G, cc.st, skill); endCC(cc); };

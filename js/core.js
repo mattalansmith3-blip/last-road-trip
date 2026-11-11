@@ -31,7 +31,7 @@ C.newGame = (meta, opts) => {
 const EDGE_VARIANTS = [ { add:[], del:[] }, { add:[[2,6]], del:[[4,6]] }, { add:[[10,13]], del:[[9,11]] }, { add:[[3,4]], del:[[2,4]] }, { add:[[1,4],[7,9]], del:[[0,2],[5,9]] } ];
 const connected = (edges, hiddenOk) => { const seen = new Set([0]), q = [0]; while (q.length) { const a = q.shift(); edges.forEach(e => { const o = e[0] === a ? e[1] : e[1] === a ? e[0] : -1; if (o >= 0 && !seen.has(o)) { seen.add(o); q.push(o); } }); } return seen.size === 14; };
 C.makeLayout = G => {
-  const base = L.EDGES.map(e => e.slice()); const moved = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12];
+  const base = L.EDGES.map(e => e.slice()); const again = G.reg === 0 && G.meta && (G.meta.trips || 0) >= 1; const moved = again ? [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12] : [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12];
   let perm = [0,1,2,3,4,5,6,7,8,9,10,11,12,13];
   for (let tries = 0; tries < 80; tries++) {
     const p = C.shuffle(G, moved), cand = perm.slice(); moved.forEach((s, i) => { cand[s] = p[i]; });
@@ -39,7 +39,8 @@ C.makeLayout = G => {
     const okEarly = early.every(s => ['gas', 'stop', 'trader', 'camp'].indexOf(T(s)) >= 0) && early.some(s => T(s) === 'gas' || T(s) === 'trader');
     const okLate = late.some(s => ['gas', 'camp', 'trader'].indexOf(T(s)) >= 0);
     const okWonder = [1, 2, 3].every(s => T(s) !== 'wonder');
-    if (okEarly && okLate && okWonder) { perm = cand; break; }
+    const okStart = !again || (cand[0] !== 0 && ['town', 'gas', 'stop', 'trader', 'camp'].indexOf(T(0)) >= 0);
+    if (okEarly && okLate && okWonder && okStart) { perm = cand; break; }
   }
   let vi = C.ri(G, 0, EDGE_VARIANTS.length - 1); let edges = base;
   const v = EDGE_VARIANTS[vi]; const key = e => Math.min(e[0], e[1]) + '-' + Math.max(e[0], e[1]); const del = new Set(v.del.map(key));
@@ -149,7 +150,7 @@ C.spendHours = (G, h) => { G.hour += h; if (G.hour > C.dayLen(G)) G.hour = C.day
 // ---------- places ----------
 C.nodeT = (G, i) => L.NODE_T[C.ident(G, i == null ? G.node : i)];
 C.nodeName = (G, i) => L.REGIONS[G.reg].names[C.ident(G, i == null ? G.node : i)];
-C.sceneKey = (G, i) => { const t = C.nodeT(G, i); return { src:'assets/scene/' + C.R(G).pre + '_' + t.s + '.webp', flip:!!t.flip }; };
+C.sceneKey = (G, i) => { const t = C.nodeT(G, i); const alt = G.reg === 3 && t.s === 'camp' && t.flip; return { src:'assets/scene/' + C.R(G).pre + '_' + t.s + (alt ? '2' : '') + '.webp', flip:alt ? false : !!t.flip }; };
 C.pinIdx = (G, i) => { const t = C.nodeT(G, i).t; if (t === 'stop') return (G.reg === 3 || C.ident(G, i) === 12) ? 4 : 1; return { town:5, trader:5, gas:0, camp:2, vista:6, wonder:7, house:3, cross:9 }[t]; };
 C.lampWonder = (G, i) => { const t = C.nodeT(G, i); return t.w ? C.R(G).wonders[t.w] : null; };
 C.wonderCost = (G, i) => Math.max(2, C.lampWonder(G, i).cost - (C.fx(G, 'wonder') ? 1 : 0) - (G.wondersThisTrip === 0 ? 1 : 0));
@@ -168,24 +169,24 @@ C.makeSpots = (G, i) => {
   }
   // a Wonder keeps a part or two in its own corner of the picture; stops before a crossing keep something to trade
   const first = spots.find(x => !x.box);
-  if (t === 'wonder' && first) first.fx = { parts:C.ri(G, 1, 2) };
+  if (t === 'wonder' && first) { first.fx = { parts:C.ri(G, 1, 2) }; const nd = C.lampWonder(G, i); const sp3 = nd && nd.cost >= 3 ? spots.find(x => !x.box && x !== first) : null; if (sp3) sp3.fx = { parts:1 }; }
   if (first && t !== 'wonder' && C.nbrs(G, i).indexOf(13) >= 0 && G.gifts.length < 2) { const sp2 = spots.find(x => !x.box && x !== first) || first; sp2.fx = { gift:'*' }; }
   return spots;
 };
 C.lootFor = (G, box) => {
-  const m = G.reg >= 2 ? 1.3 : 1; const amt = (a, b) => Math.max(1, Math.round(C.ri(G, a, b) * m));
-  if (!box) { const lowF = G.fuel <= 2, lowB = G.batt <= 1; const k = C.wpick(G, { fuel:lowF ? 55 : 24, food:G.food <= 1 ? 16 : 9, batt:lowB ? 38 : 13, parts:15, treats:5, gift:G.gifts.length === 0 ? 22 : 8, nothing:(lowF || lowB) ? 6 : 24 }); if (k === 'fuel') return { fuel:lowF ? amt(2, 3) : amt(1, 2) }; if (k === 'food') return { food:1 }; if (k === 'batt') return { batt:lowB ? amt(2, 3) : amt(1, 2) }; if (k === 'parts') return { parts:amt(1, 2) }; if (k === 'treats') return { treats:1 }; if (k === 'gift') return { gift:'*' }; return { spirit:0, junk:1 }; }
+  const m = 1; const amt = (a, b) => Math.max(1, Math.round(C.ri(G, a, b) * m));
+  if (!box) { const lowF = G.fuel <= 2, lowB = G.batt <= 1; const k = C.wpick(G, { fuel:lowF ? 55 : 24, food:G.food <= 1 ? 16 : 9, batt:lowB ? 38 : 9, parts:15, treats:5, gift:G.gifts.length === 0 ? 22 : 8, nothing:(lowF || lowB) ? 6 : 24 }); if (k === 'fuel') return { fuel:lowF ? amt(2, 3) : amt(1, 2) }; if (k === 'food') return { food:1 }; if (k === 'batt') return { batt:lowB ? amt(2, 3) : amt(1, 2) }; if (k === 'parts') return { parts:amt(1, 2) }; if (k === 'treats') return { treats:1 }; if (k === 'gift') return { gift:'*' }; return { spirit:0, junk:1 }; }
   if (box === 'crate') return C.rnd(G) < .5 ? { parts:amt(1, 3) } : { fuel:amt(1, 3), batt:1 };
   if (box === 'cooler') return { food:amt(1, 2), gift:'*' };
   if (box === 'mailbox') return { batt:amt(1, 2), gift:'*', spirit:1 };
   if (box === 'lockbox') { const r = C.rnd(G); return r < .35 ? { gadget:'*', parts:1 } : r < .6 ? { souv:'*', batt:1 } : { parts:amt(3, 4), batt:1 }; }
-  return C.rnd(G) < .4 ? { souv:'*', batt:3 } : C.rnd(G) < .5 ? { gadget:'*', batt:3 } : { parts:4, batt:4 }; // safe
+  return C.rnd(G) < .4 ? { souv:'*', batt:2 } : C.rnd(G) < .5 ? { gadget:'*', batt:2 } : { parts:4, batt:3 }; // safe
 };
 C.looksAllowed = G => 3 + 0 + (C.fx(G, 'look')) + (C.has2(G, 'torch') ? 1 : 0);
 C.arrive = G => {
   const n = G.nodes[G.node], t = C.nodeT(G, G.node);
   n.seen = 2; n.typeKnown = true;
-  if (!n.spots) { n.spots = C.makeSpots(G, G.node); n.looksLeft = n.spots.length + 1 + C.fx(G, 'look') + (C.has2(G, 'torch') ? 1 : 0); }
+  if (!n.spots) { n.spots = C.makeSpots(G, G.node); n.looksLeft = n.spots.length ? n.spots.length + 1 + C.fx(G, 'look') + (C.has2(G, 'torch') ? 1 : 0) : 0; }
   if (['town', 'gas', 'stop', 'camp', 'trader'].indexOf(t.t) >= 0) G.lastLit = G.node;
   C.markSeen(G);
   if (t.t === 'vista' && !n.vistaDone) { n.vistaDone = true; C.revealTypes(G); const d = 1 + C.fx(G, 'vista'); C.addSpirit(G, d); G.meta.scrap['v_' + C.R(G).id] = G.meta.scrap['v_' + C.R(G).id] || { r:G.reg, day:G.day }; n.vistaGain = d; }
@@ -289,14 +290,14 @@ C.tow = (G, why) => {
 
 // ---------- gas station mechanic ----------
 C.fixFee = G => (G.reg >= 2 ? 2 : 1);
-C.mechanic = (G) => { if (G.wear <= 0) return { err:'Nothing to fix.' }; const fee = C.fixFee(G); if (G.batt < fee) return { err:'Not enough batteries.' }; G.batt -= fee; const w = Math.min(G.wear, 2); G.wear -= w; C.spendHours(G, 1); return { ok:true, w, fee }; };
+C.mechanic = (G) => { if (G.wear <= 0) return { err:'Nothing to fix.' }; if (C.hoursLeft(G) < 1) return { err:'No daylight left. Camp first.' }; const fee = C.fixFee(G); if (G.batt < fee) return { err:'Not enough batteries.' }; G.batt -= fee; const w = Math.min(G.wear, 2); G.wear -= w; C.spendHours(G, 1); return { ok:true, w, fee }; };
 // ---------- odd jobs: a standing way to earn batteries at any stop with people in it ----------
 C.JOBT = ['town', 'gas', 'stop', 'trader'];
 C.jobPay = G => L.JOBPAY[G.reg] + (G.gentle ? 1 : 0);
 C.canJob = G => { const n = G.nodes[G.node]; return C.JOBT.indexOf(C.nodeT(G, G.node).t) >= 0 && n.jobDay !== G.day && C.hoursLeft(G) >= 1; };
 C.job = G => { if (!C.canJob(G)) return 0; const pay = C.jobPay(G); G.nodes[G.node].jobDay = G.day; C.spendHours(G, 1); G.batt += pay; return pay; };
 // ---------- trading ----------
-C.price = (G, k) => { let p = L.PRICE[k][G.reg]; if (k === 'fuel' && C.fx(G, 'gas')) p = Math.max(1, p - 1); return p; };
+C.price = (G, k) => { let p = L.PRICE[k][G.reg]; if (k === 'fuel' && C.fx(G, 'gas') && G.reg <= 1) p = Math.max(1, p - 1); return p; };
 C.buy = (G, k, n) => { // k: fuel, food, part
   const unit = C.price(G, k), cost = unit * n; if (G.batt < cost) return { err:'Not enough batteries.' };
   if (k === 'fuel') { if (G.fuel + n > C.fuelCap(G)) return { err:'The tank will not hold that much.' }; G.fuel += n; }
@@ -316,8 +317,12 @@ C.shopFor = G => {
 
 // ---------- encounter: Standoff ----------
 C.sfNew = (G, crossing) => {
-  const r = C.R(G); const lastC = G.lastEnc && G.lastEnc.cid; const pool = r.wild.filter(x => x !== lastC); const cid = C.pick(G, pool.length ? pool : r.wild), c = L.CRITTERS[cid];
-  G.seenCrit = G.seenCrit || {}; const ix = (G.seenCrit[cid] = (G.seenCrit[cid] || 0) + 1) - 1; if (G.lastEnc) G.lastEnc.cid = cid; else G.lastEnc = { kind:'standoff', drive:G.driveN, cid, oid:null };
+  const r = C.R(G); const lastC = G.lastEnc && G.lastEnc.cid; G.seenCrit = G.seenCrit || {}; G.crossCrit = G.crossCrit || {};
+  let pool = r.wild.filter(x => x !== lastC); if (!pool.length) pool = r.wild.slice();
+  if (crossing && G.reg === 2 && !G.crossCrit.steer) pool = ['steer'];
+  else if (crossing) { const fresh = pool.filter(x => !G.crossCrit[x] && !G.seenCrit[x]); const cf = pool.filter(x => !G.crossCrit[x]); pool = fresh.length ? fresh : cf.length ? cf : pool; }
+  else { const fresh = pool.filter(x => !G.seenCrit[x]); if (fresh.length && C.rnd(G) < .6) pool = fresh; }
+  const cid = C.pick(G, pool), c = L.CRITTERS[cid]; if (crossing) G.crossCrit[cid] = 1; const ix = (G.seenCrit[cid] = (G.seenCrit[cid] || 0) + 1) - 1; if (G.lastEnc) G.lastEnc.cid = cid; else G.lastEnc = { kind:'standoff', drive:G.driveN, cid, oid:null };
   const st = { kind:'standoff', cid, ix:ix % c.intro.length, crossing:!!crossing, calm:c.calm + C.fx(G, 'calm') + (G.spirit >= 7 ? 6 : 0) - (G.spirit <= 2 ? 8 : 0) + (G.gentle ? 12 : 0) + (crossing ? 8 * (G.crossFails || 0) : 0), pat:c.pat + 1 + (G.gentle ? 1 : 0), used:{}, log:[], turn:0, done:null };
   return st;
 };
@@ -365,12 +370,13 @@ C.sfFinish = G => {
 };
 
 // ---------- encounter: Roadblock ----------
-C.rbNew = G => {
-  let ids = Object.keys(L.OBST).filter(k => L.OBST[k].reg.indexOf(G.reg) >= 0); const lo = G.lastEnc && G.lastEnc.oid; if (ids.length > 1) ids = ids.filter(k => k !== lo); const oid = C.pick(G, ids), o = L.OBST[oid]; if (G.lastEnc) G.lastEnc.oid = oid; else G.lastEnc = { kind:'roadblock', drive:G.driveN, cid:null, oid };
+C.rbNew = (G, crossing) => {
+  let ids = Object.keys(L.OBST).filter(k => L.OBST[k].reg.indexOf(G.reg) >= 0); if (crossing && C.R(G).obst) ids = C.R(G).obst.slice(); const lo = G.lastEnc && G.lastEnc.oid; if (ids.length > 1) ids = ids.filter(k => k !== lo);
+  G.seenObst = G.seenObst || {}; const fresh = ids.filter(k => !G.seenObst[k]); if (fresh.length && (crossing || C.rnd(G) < .6)) ids = fresh; const oid = C.pick(G, ids), o = L.OBST[oid]; G.seenObst[oid] = 1; if (G.lastEnc) G.lastEnc.oid = oid; else G.lastEnc = { kind:'roadblock', drive:G.driveN, cid:null, oid };
   return { kind:'roadblock', oid, tags:o.tags.slice(0, G.reg < 1 ? 1 : (C.rnd(G) < .4 ? 2 : 1)).slice(), solved:[], log:[], done:null, hours:0 };
 };
 C.rbTools = (G, tag) => { const out = []; L.TAGSOLVE[tag].forEach(t => { if (L.GADGETS[t] && C.has2(G, t)) out.push({ id:t, kind:'gadget' }); else if (L.VPARTS[t] && C.has(G, t)) out.push({ id:t, kind:'part' }); }); return out; };
-C.rbHand = (G, st, tag) => { st.solved.push(tag); C.spendHours(G, 2); C.addWear(G, 1); st.hours += 2; return 'You clear it by hand. It takes two hours and the van does not like the dust.'; };
+C.rbHand = (G, st, tag) => { st.solved.push(tag); C.spendHours(G, 2); C.addWear(G, 1); if (C.nodeT(G).t === 'cross' && G.wear >= 10) G.wear = 9; st.hours += 2; return 'You clear it by hand. It takes two hours and the van does not like the dust.'; };
 C.rbUse = (G, st, tag, toolId) => { st.solved.push(tag); C.spendHours(G, 1); st.hours += 1; return L.GADGETS[toolId] ? 'The ' + L.GADGETS[toolId].n.toLowerCase() + ' does the job.' : 'The ' + L.VPARTS[toolId].n.toLowerCase() + ' does the job.'; };
 C.rbCut = (G, st, tag) => { if (G.parts < 2) return null; G.parts -= 2; st.solved.push(tag); C.spendHours(G, 1); return 'You cut through with spare parts. Two parts, one hour.'; };
 C.rbDone = (st) => st.tags.every(t => st.solved.indexOf(t) >= 0);
@@ -411,17 +417,18 @@ C.ccNew = (G, len, crossing) => {
     rows.push({ t:+t.toFixed(2), lanes, free, sp:lanes.map(l => l ? C.ri(G, 0, 7) : -1) });
     t += gap;
   }
-  return { kind:'closecall', rows, len:t + 1, beat, slick, speed:G.gentle ? .85 : 1, tol:C.ccTol(G) + (crossing ? (G.reg >= 3 ? -1 : G.reg >= 2 ? 0 : 1) + (G.crossFails || 0) : 0), hits:0, done:null, crossing:!!crossing };
+  return { kind:'closecall', rows, len:t + 1, beat, slick, speed:G.gentle ? .85 : 1, tol:C.ccTol(G) + (crossing ? (G.reg >= 3 ? -1 : G.reg >= 2 ? 0 : 1) + (G.crossFails || 0) : 0), forgive:C.fx(G, 'cc'), hits:0, done:null, crossing:!!crossing };
 };
 C.ccTol = G => 3 + C.fx(G, 'cc') + (C.has(G, 'bullbar') ? 1 : 0) + (C.has(G, 'tires') ? 1 : 0) + (G.gentle ? 2 : 0);
 C.ccFinish = (G, st, hits, crossing) => {
-  G.stats.ccHits += hits; const out = { hits, lines:[], fail:false };
-  C.addWear(G, hits <= 1 ? 0 : 2); if (hits > 2) C.addSpirit(G, -1);
+  G.stats.ccHits += hits; const out = { hits, lines:[], fail:false }; const eff = Math.max(0, hits - (st.forgive || 0)); out.eff = eff;
+  C.addWear(G, eff <= 1 ? 0 : 2); if (eff > 2) C.addSpirit(G, -1);
   out.fx = [];
   if (hits === 0) { const d = C.addSpirit(G, st.beat ? 2 : 1); out.lines.push('Clean run. (Spirit +' + d + ')');
     const need = G.fuel <= 2 ? { fuel:3 } : G.batt <= 1 ? { batt:3 } : G.parts < 2 ? { parts:1 } : C.pick(G, [{ fuel:2 }, { batt:2 }, { parts:1 }]);
     out.fx = C.applyFx(G, crossing ? { parts:1, batt:2, fuel:2 } : need); out.lines.push(crossing ? 'Someone on the far side of the bridge has been watching you cross, and hands over a bag. Nobody says much.' : 'A little way on, you spot something on the shoulder that the road shook loose. You pick it up.'); }
   if (crossing && hits > st.tol) out.fail = true;
+  if (crossing && !out.fail && G.wear >= 10) { G.wear = 9; out.lines.push('Marigold limps through on the last of her nerve. Wear 9. She will not take another hit.'); }
   return out;
 };
 // the bot / auto-tester samples a Close Call with a skill (probability of dodging each row)
@@ -445,7 +452,7 @@ C.nextRegion = G => {
   const done = G.reg; G.meta.scrap['x_' + L.REGIONS[done].id] = G.meta.scrap['x_' + L.REGIONS[done].id] || { r:done, day:G.day };
   if (done >= 3) { G.won = true; return { win:true }; }
   G.crossFails = 0; C.enterRegion(G, done + 1); C.newDay(G);
-  const fx = C.applyFx(G, { fuel:5, food:3, spirit:2, batt:3 }); return { fx };
+  const fx = C.applyFx(G, { fuel:5, food:3, spirit:2, batt:2 }); return { fx };
 };
 C.restCostsMeal = G => 0; // a day of rest costs a day, not a meal
 C.stars = G => 2 + ((G.tows <= 2 || G.wondersThisTrip >= 5) ? 1 : 0);

@@ -74,7 +74,7 @@ L.TAPE_BY_ID = {}; L.TAPES.forEach(t => L.TAPE_BY_ID[t.id] = t);
 
 // ---------- companions ----------
 L.PASS = {
-  pelican: { n:'Pelican', i:0, d:'Spots the next fuel: gas stops charge 1 less.', fx:{ gas:1 }, home:'fl' },
+  pelican: { n:'Pelican', i:0, d:'Knows the coastal pumps: gas costs 1 less in Florida and the Gulf.', fx:{ gas:1 }, home:'fl' },
   raccoon: { n:'Raccoon', i:1, d:'Opens any crate, cooler or lockbox, free.', fx:{ key:1 }, home:'gulf' },
   armadillo:{ n:'Armadillo', i:2, d:'Digs out one extra find at every stop.', fx:{ look:1 }, home:'tx' },
   crow:    { n:'Crow', i:3, d:'Shows where hidden side roads start.', fx:{ hint:1 }, home:'mj' },
@@ -144,7 +144,7 @@ L.CRITTERS = {
 L.OBST = {
   log:     { n:'Fallen Log',      i:0, tags:['wood'],            reg:[0,1,2] },
   boulder: { n:'Boulder',         i:1, tags:['heavy'],           reg:[2,3] },
-  barrel:  { n:'Rolled Barrels',  i:2, tags:['debris'],          reg:[0,1,2,3] },
+  barrel:  { n:'Rolled Barrels',  i:2, tags:['debris'],          reg:[0,1,3] },
   weed:    { n:'Tumbleweeds',     i:3, tags:['tangled'],         reg:[2,3] },
   pallet:  { n:'Pallet Pile',     i:4, tags:['wood','debris'],   reg:[0,1,2] },
   tire:    { n:'Truck Tire',      i:5, tags:['heavy'],           reg:[1,2,3] },
@@ -185,7 +185,7 @@ L.POS_FN = {
 L.REGIONS = [
   { id:'fl', pre:'fl', n:'The Florida Keys', short:'Florida', price:1, weather:{sun:.4,over:.12,rain:.3,wind:.18},
     blurb:'Salt air and empty resorts. The road runs out over open water.',
-    wild:['gator','boar'], tint:'#6fb7ae',
+    wild:['gator','boar'], obst:['barrel','log','tarp'], tint:'#6fb7ae',
     names:['Mara\'s Landing','Gas & Bait','Coral Cafe','Mangrove Camp','Old Pier Lookout','The Big Orange','Stilt House','The Starlite Drive-In','The Lighthouse at Shell Key','Harbor Market','Palm Camp','Tidewater Gas','Flamingo Motel','Seven Mile Bridge'],
     wonders:{ A:{id:'orange',n:'The Big Orange',cost:3,verb:'Wire the sign',txt:'A fruit stand with a forty-foot orange on the roof. The neon is dead but the glass tubes are all there.', done:'The orange comes on slowly, then all at once. It is the warmest thing for a hundred miles.'},
               B:{id:'starlite',n:'The Starlite Drive-In',cost:4,verb:'Start the projector',txt:'A white screen on a field of cracked gravel. The projection booth is padlocked but not locked.', done:'Light on the screen. Nothing is playing, and that turns out to be enough.'},
@@ -193,7 +193,7 @@ L.REGIONS = [
     cross:{ n:'Seven Mile Bridge', seq:['roadblock','closecall'], txt:'The only way west is seven miles of bridge with the sea on both sides. Something has been left across the lane.', len:10 } },
   { id:'gulf', pre:'gulf', n:'The Gulf Coast', short:'Gulf Coast', price:1, weather:{sun:.22,over:.2,rain:.3,fog:.28},
     blurb:'Spanish moss, slow water, brass bands somewhere out of sight.',
-    wild:['gator','boar','bear'], tint:'#8a9a6a',
+    wild:['gator','boar','bear'], obst:['log','tire','tarp'], tint:'#8a9a6a',
     names:['Bayou Landing','Pump & Pantry','Dockside Diner','Cypress Camp','River Bend','Bayou Radio WBRT','Crawfish Shack','The Marguerite','Old Millhouse','Boat Dock Market','Mossy Camp','Parish Gas','Kitchen on the Water','The Toll Bridge'],
     wonders:{ A:{id:'radio',n:'Bayou Radio WBRT',cost:3,verb:'Bring it on air',txt:'A tin shack with a mast taller than any tree. The transmitter hums when you touch it.', done:'The mast starts to sing. Across the water, porch lights flicker on.'},
               B:{id:'marguerite',n:'The Marguerite',cost:4,verb:'Fire up the boiler',txt:'A riverboat tied to cypress roots. Its calliope is still on the top deck.', done:'The calliope sounds three notes. A heron lifts off, unbothered.'},
@@ -201,26 +201,26 @@ L.REGIONS = [
     cross:{ n:'The Toll Bridge', seq:['haggle','closecall'], txt:'The bridge has a toll booth, a lantern, and one person who would like to talk first.', len:12 } },
   { id:'tx', pre:'tx', n:'The Texas Plains', short:'Texas', price:2, weather:{sun:.36,over:.12,rain:.12,wind:.3,dust:.1},
     blurb:'Big sky, long fences, wind that does not stop and a lot of room to think.',
-    wild:['boar','coyote','steer','cougar'], tint:'#d6a35a',
+    wild:['boar','coyote','steer','cougar'], obst:['boulder','tire','weed'], tint:'#d6a35a',
     names:['Prairie Junction','Last Chance Pumps','Windmill Cafe','Tank Camp','Storm Watch','Wind Pumps','Rosa\'s Barn Road','The Grain Elevator','The Star Gate','Feed Store Market','Mesa Camp','Highway 9 Gas','Tin Roof Cafe','The Cattle Guard'],
-    wonders:{ A:{id:'windpumps',n:'The Wind Pumps',cost:4,verb:'Free the blades',txt:'A field of windmills, half of them locked in place by rust and bird nests.', done:'The blades catch, one after another, until the whole field is turning.'},
+    wonders:{ A:{id:'windpumps',n:'The Wind Pumps',cost:3,verb:'Free the blades',txt:'A field of windmills, half of them locked in place by rust and bird nests.', done:'The blades catch, one after another, until the whole field is turning.'},
               B:{id:'elevator',n:'The Grain Elevator',cost:4,verb:'Ring the bell',txt:'Concrete silos, a rail car on a siding. The bell rope hangs just out of reach.', done:'One long note rolls out across the wheat and does not come back.'},
               C:{id:'stargate',n:'The Star Gate',cost:3,verb:'Wire the stars',txt:'A ranch gate with a steel star on top. Someone has strung lights along the fence.', done:'The star glows amber against the evening, a small thing and a good one.'} },
     cross:{ n:'The Cattle Guard', seq:['standoff','roadblock'], txt:'The road ahead is a cattle grid across open range. The herd has not heard about the road.', len:12 } },
   { id:'mj', pre:'mj', n:'Route 66 & the Mojave', short:'Mojave', price:2, weather:{sun:.5,over:.05,wind:.2,dust:.25},
     blurb:'Salt flats, blue-hour neon and the last long stretch to the coast.',
-    wild:['coyote','cougar','steer'], tint:'#c98d5b',
-    names:['Amboy Junction','Desert Pumps','Starlight Motel','Joshua Camp','Sunset Viewer','The Sign Boneyard','Adobe House','The Dish','The Sundial','Desert Market','Dune Camp','Salt Flat Gas','Pool Hall Motel','Amboy Road'],
-    wonders:{ A:{id:'boneyard',n:'The Sign Boneyard',cost:4,verb:'Light a sign',txt:'Old motel and casino signs, hauled out here when the town stopped paying their power bills. A boot, a star, a martini glass. Dee has been standing them back up.', done:'One by one, the old signs go amber. The boot goes last.'},
+    wild:['coyote','cougar','steer'], obst:['boulder','tire','weed','tarp'], tint:'#c98d5b',
+    names:['Amboy Junction','Desert Pumps','Starlight Motel','Joshua Camp','Sunset Viewer','The Sign Boneyard','Adobe House','The Dish','The Sundial','Desert Market','Boulder Camp','Salt Flat Gas','Pool Hall Motel','Amboy Road'],
+    wonders:{ A:{id:'boneyard',n:'The Sign Boneyard',cost:3,verb:'Light a sign',txt:'Old motel and casino signs, hauled out here when the town stopped paying their power bills. A boot, a star, a martini glass. Dee has been standing them back up.', done:'One by one, the old signs go amber. The boot goes last.'},
               B:{id:'dish',n:'The Dish',cost:4,verb:'Turn it to the sky',txt:'A radio dish the size of a house, aimed at nothing in particular. The motor still works.', done:'It swings slowly to the east and holds. You can feel it listening.'},
               C:{id:'sundial',n:'The Sundial',cost:3,verb:'Clear the face',txt:'A bronze gnomon on a stone ring, buried to the hour marks in drifted sand.', done:'The shadow falls exactly where it should. It is later than you thought.'} },
-    cross:{ n:'Amboy Road', seq:['standoff','closecall','roadblock'], txt:'The last pass before the coast. Salt, wind, and a long straight road with surprises on it.', len:14 } },
+    cross:{ n:'Amboy Road', seq:['standoff','closecall','roadblock'], txt:'The last pass before the coast. Salt, wind, and a long straight road with surprises on it.', len:16 } },
 ];
 L.REG_NAMES = ['Florida','Gulf Coast','Texas','Mojave'];
 
 // shop prices etc
-L.PRICE = { fuel:[1,1,2,2], food:[1,1,1,2], part:[2,3,3,4] };
-L.JOBPAY = [3, 3, 4, 4];
+L.PRICE = { fuel:[1,1,2,3], food:[1,1,2,2], part:[2,3,3,4] };
+L.JOBPAY = [3, 3, 3, 3];
 L.FUEL_CAP = 10; L.PACK = 8; L.HOURS = 8;
 L.MAXTOW = 5;
 

@@ -135,7 +135,7 @@ const E = [
        { t:'Ask her about the next stretch', fx:{ food:1, spirit:1, hint:1 }, r:'"Keep the sun on your left side until the dry lake," she says, and shows you a gap in the fence that is not on any map.' } ] },
  { id:'wendell3', story:1, reg:3, node:1, who:'wendell', t:'Wendell, Again', req:{ npc:'wendell' },
    p:['A familiar rig is parked sideways at the Amboy pumps, hazard lights blinking, with Wendell on the running board eating from a can.',
-      '"Thought I recognized the van," he says. "I was heading east when I heard about the crossing ahead. Salt wind, long bridge. Take this."'],
+      '"Thought I recognized the van," he says. "I was heading east when I heard about the crossing ahead. Salt flats, one long straight road, and nowhere to stop. Take this."'],
    o:[ { t:'Take the fuel cans', fx:{ fuel:3, spirit:1 }, r:'Three full cans, strapped to your bumper with his own ratchet straps. "Bring the straps back whenever," he says. He never says when.' },
        { t:'Ask what he knows about the crossing', fx:{ batt:2, spirit:2, map:1 }, r:'He talks for ten minutes about the salt flats, mostly about which lane is cracked and where the shade is. You write it on your hand.' } ] },
  { id:'f_town1', reg:null, at:['town', 'trader'], who:null, img:['uiicons',10], t:'Notice Board',
